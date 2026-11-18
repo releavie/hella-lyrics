@@ -40,25 +40,34 @@ BarWidget {
     // how wide the line may get before it has to glide (angelOS: Theme.u * 250,
     // one art pixel = 2 screen px)
     readonly property int maxWidth: setting("maxWidth", 500)
+    // nudge the line against a track that is not timed as the player counts it
+    readonly property int offsetMs: Number(setting("offsetMs", 0)) || 0
+    // comma-separated search order; empty keeps the engine's built-in order
+    readonly property string sourceOrder: String(setting("sources", "") || "")
 
     function pushSettings() {
         // setLyrics assigns a fresh object: that assignment is what re-evaluates
         // the engine's bindings on these settings
-        Lib.Config.setLyrics({
+        const patch = {
             "byWord": byWord,
             "onBeat": onBeat,
             "glow": glowMode,
             "preferPlayer": prefer,
-            "searchInMessengers": messengerSearch
-        })
+            "searchInMessengers": messengerSearch,
+            "offsetMs": offsetMs,
+            "sources": Lib.Config.parseSources(sourceOrder)
+        }
+        Lib.Config.setLyrics(patch)
         if (svc && typeof svc.updateConfig === "function")
-            svc.updateConfig({ "byWord": byWord, "onBeat": onBeat, "glow": glowMode, "preferPlayer": prefer, "searchInMessengers": messengerSearch })
+            svc.updateConfig(patch)
     }
     onByWordChanged: pushSettings()
     onOnBeatChanged: pushSettings()
     onGlowModeChanged: pushSettings()
     onPreferChanged: pushSettings()
     onMessengerSearchChanged: pushSettings()
+    onOffsetMsChanged: pushSettings()
+    onSourceOrderChanged: pushSettings()
     Component.onCompleted: {
         pushSettings()
         shown = line

@@ -27,6 +27,8 @@ Item {
         if (settings.glow !== undefined) patch.glow = settings.glow
         if (settings.preferPlayer !== undefined) patch.preferPlayer = settings.preferPlayer
         if (settings.searchInMessengers !== undefined) patch.searchInMessengers = settings.searchInMessengers
+        if (settings.offsetMs !== undefined) patch.offsetMs = Number(settings.offsetMs) || 0
+        if (settings.sources !== undefined) patch.sources = Lib.Config.parseSources(settings.sources)
         Lib.Config.setLyrics(patch)
     }
 

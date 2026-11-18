@@ -144,6 +144,49 @@ ShellRoot {
         ok("a non-messenger never blocks the network",
            lyr.isMessenger(null) === false, "isMessenger(null)=" + lyr.isMessenger(null))
 
+        // ---- the player's real clock (MPRIS Position), not the extrapolation ----
+        // `x 12345678` is `busctl get-property … Position` in microseconds
+        lyr.livePosition = false
+        lyr.stalled = false
+        lyr.samplePosition("x 12345678")
+        ok("a Position sample is read",
+           lyr.positionLive === true && Math.abs(lyr._realPos - 12.3456) < 0.001,
+           "live=" + lyr.positionLive + " pos=" + lyr._realPos)
+        ok("the line uses the sample",
+           Math.abs(lyr.positionNow() - 12.3456) < 0.02, "now=" + lyr.positionNow())
+        ok("a bad sample is ignored", (lyr.samplePosition("garbage") || true) &&
+           Math.abs(lyr._realPos - 12.3456) < 0.001, "pos=" + lyr._realPos)
+        // the player keeps reporting the same position for over the grace period: it stalled
+        lyr._stallAt = Date.now() - 2000
+        lyr._stallPos = lyr._realPos
+        lyr.samplePosition("x 12345678")
+        ok("no progress while Playing is a stall", lyr.stalled === true)
+        ok("a stalled line holds its position",
+           Math.abs(lyr.positionNow() - 12.3456) < 0.001, "now=" + lyr.positionNow())
+        // audio resumes: the next sample clears the stall and moves the line
+        lyr.samplePosition("x 13345678")
+        ok("a fresh sample clears the stall",
+           lyr.stalled === false && Math.abs(lyr._realPos - 13.3456) < 0.001,
+           "stalled=" + lyr.stalled + " pos=" + lyr._realPos)
+        // a seek back the clock cannot explain is followed at once
+        lyr.samplePosition("x 5000000")
+        ok("a backward jump snaps the line",
+           Math.abs(lyr._realPos - 5) < 0.001 && Math.abs(lyr.positionNow() - 5) < 0.05,
+           "pos=" + lyr._realPos)
+
+        // ---- word timing wins over line timing ----
+        ok("plain LRC has no word times", lyr.hasWordTimes("[00:01.00]one\n[00:02.00]two") === false)
+        ok("enhanced LRC has word times", lyr.hasWordTimes("[00:01.00]<00:01.00>one <00:01.50>two") === true)
+        var ttml = '<tt><body><div><p begin="1.5" end="3"><span begin="1.5">Hello</span> '
+            + '<span begin="2">world</span></p><p begin="4">Next line</p></div></body></tt>'
+        var tl = lyr.ttmlToLrc(ttml)
+        ok("Apple TTML keeps the words' times",
+           lyr.hasWordTimes(tl) && tl.indexOf("Hello <00:02.00>world") > 0, tl)
+        var gp = lyr.geniusPlain('<div data-lyrics-container="true">Look at the stars<br>'
+            + 'And everything you do</div>')
+        ok("Genius HTML becomes plain text",
+           gp === "Look at the stars\nAnd everything you do", JSON.stringify(gp))
+
         // ---- a real source: lrclib over the network ----
         lyr.http("https://lrclib.net/api/search?q=radiohead+creep", function (code, body) {
             ok("lrclib status 200", code === 200 && Array.isArray(body), "hits=" + (body ? body.length : 0))

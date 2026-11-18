@@ -30,7 +30,10 @@ what was changed, and what is not bundled.
 
 - Omarchy (the `quickshell` shell with the plugin system in `omarchy plugin`).
 - An MPRIS-capable player (any browser tab playing YouTube Music counts).
-- Network access to `lrclib.net` for fetching lyrics.
+- Network access to the lyrics services for fetching lyrics (lrclib first; the
+  rest are fallbacks).
+- `busctl` (systemd) to read the player's real MPRIS `Position`. Without it the
+  plugin falls back to the shell's extrapolated position.
 - Optional: `python3` + `python-numpy` for the beat grid, and `cava`,
   `pw-record`, `pw-dump`, `pactl` for the loudness glow, plus `curl` for remote
   cover art. Without them the plugin still shows synced lyrics line by line.
@@ -75,11 +78,32 @@ Set through the shell's plugin settings (they live in your
 | `artwork` | `cover` | `cover` — the album art; `note` — the note glyph |
 | `opacity` | `100` | how solid the line sits in the bar, 20–100 |
 | `maxWidth` | `500` | widest a line may get before it glides |
+| `offsetMs` | `0` | shift the lyrics earlier (negative) or later (positive) than the player |
+| `sources` | — | comma-separated search order, e.g. `lrclib, amll, netease, apple` |
 | `preferPlayer` | — | substring of the player to prefer when several are running |
 | `searchInMessengers` | `false` | search a messenger's voice messages online too, without asking per message |
 
 `opacity` also has a slider in the player card (the gear in its transport row);
 the drag previews live and only the release is saved.
+
+### Sources
+
+The built-in order is `local`, `player`, `lrclib`, `amll`, `netease`, `kugou`,
+`qq`, `lrccx` (Apple Music), `musixmatch`, `genius`, `betterlyrics`, `ovh`.
+Empty `sources` keeps it; otherwise only the listed sources are used, in that
+order. `apple` is an alias for `lrccx` (its Apple catalogue), and names are
+case-insensitive.
+
+A line-timed result is shown as soon as it arrives. The word-capable sources
+then get one chance each, in the same order, and the line is replaced if one
+has the words' own times: word timing wins over the source order without
+delaying the first line.
+
+Sync follows the player's real MPRIS `Position` (read with `busctl` twice a
+second), not the shell's wall-clock extrapolation. A player that buffers or
+stalls holds the line where it is until the position moves again; an
+unannounced seek snaps it at once. If the player does not expose `Position`,
+the old behaviour remains.
 
 ### Messengers and voice messages
 

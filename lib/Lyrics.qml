@@ -677,8 +677,13 @@ Singleton {
     // ---- what to search for ----
     readonly property bool fromBrowser: !!player && /firefox|chrom|brave|vivaldi|helium|zen|edge|opera|librewolf|browser|yandex/i.test((player.identity || "") + " " + (player.desktopEntry || ""))
     readonly property var cleaned: clean(title, artist)
-    readonly property var allSources: ["local", "player", "lrclib", "amll", "netease", "kugou", "qq", "lrccx", "musixmatch", "ovh"]
-    readonly property var sources: Lib.Config.lyrics.sources && Lib.Config.lyrics.sources.length ? Lib.Config.lyrics.sources : allSources
+    // lrclib first (it has most of the library), then the word-timed stores, then the
+    // fallbacks. The order is a setting; "apple" is the lrc.cx catalogue's Apple TTML.
+    readonly property var allSources: ["local", "player", "lrclib", "amll", "netease", "kugou", "qq", "lrccx", "musixmatch", "genius", "betterlyrics", "ovh"]
+    readonly property var sources: {
+        const list = Lib.Config.parseSources(Lib.Config.lyrics.sources);
+        return list.length ? list : allSources;
+    }
 
     // ---- what may leave the machine ----
     // A messenger publishes what was said into it, not a song (see `messengers` above). Those
@@ -832,11 +837,18 @@ Singleton {
     }
 
     // ---- word by word: the song's own words' times for one found without them ----
-    // NetEase keeps them for many songs (YRC: popular ones, foreign mostly); looked for once a song
-    // (`wordsTried` in its cache file), the lyrics replaced when they are there
+    // A line-timed result is shown at once; the sources that can give the words their own
+    // times are then asked in the chosen order, and the line is replaced when one of them
+    // has them. That is "word timing wins over the source order" without delaying the
+    // first line: lrclib usually answers first, while NetEase's YRC, AMLL, Apple's TTML
+    // and BetterLyrics often carry the words.
+    function hasWordTimes(lrc) {
+        return /<\d+:\d+(?:[.:]\d+)?>/.test(String(lrc || ""));
+    }
     function wordsUpgrade(key, data) {
-        // another NetEase round trip: never for a track that may not leave the machine
-        if (netBlocked || Lib.Config.lyrics.byWord === false || !data || !data.syncedLyrics || data.wordsTried || data.source === "local" || /<\d+:\d+/.test(data.syncedLyrics))
+        // another network round trip: never for a track that may not leave the machine,
+        // and never over a local file or the player's own text
+        if (netBlocked || Lib.Config.lyrics.byWord === false || !data || !data.syncedLyrics || data.wordsTried || data.source === "local" || data.source === "player" || hasWordTimes(data.syncedLyrics))
             return;
         const c = cleaned, d = length;
         const tried = () => {
@@ -845,37 +857,38 @@ Singleton {
                     "wordsTried": true
                 }));
         };
-        http("https://music.163.com/api/cloudsearch/pc?" + query({
-            "s": (c.title + " " + c.artist).trim(),
-            "type": 1,
-            "limit": 10
-        }), (code, body) => {
-            const songs = body && body.result && body.result.songs ? body.result.songs : [];
-            const match = songs.find(x => root.matches({
-                    "title": x.name,
-                    "artist": (x.ar || []).map(a => a.name).join(", "),
-                    "duration": (x.dt || 0) / 1000
-                }, c, d));
-            if (!match)
+        const fetchers = {
+            "lrclib": cb => lrclibWord(c, d, cb),
+            "amll": cb => amllWord(c, d, cb),
+            "netease": cb => neteaseWord(c, d, cb),
+            "lrccx": cb => appleWord(c, d, cb),
+            "betterlyrics": cb => betterlyricsWord(c, d, cb)
+        };
+        const steps = sources.filter(s => !!fetchers[s]).map(s => fetchers[s]);
+        const run = () => {
+            const step = steps.shift();
+            if (!step)
                 return tried();
-            http("https://music.163.com/api/song/lyric/v1?id=" + match.id + "&lv=1&yv=1", (code2, lyr) => {
-                const lrc = lyr && lyr.yrc ? root.yrcToLrc(lyr.yrc.lyric) : "";
-                if (!root.goodLrc(lrc) || root._mem[key] !== data)
-                    return tried();
-                const up = {
-                    "source": "NetEase",
-                    "syncedLyrics": lrc,
-                    "trackName": match.name,
-                    "duration": (match.dt || 0) / 1000,
-                    "wordsTried": true
-                };
-                if (root.tempoVersion && up.duration > 0 && d > 0 && Math.abs(up.duration - d) > 3)
-                    up.scale = d / up.duration;
-                root.store(key, up);
-                if (key === root.trackKey)
-                    root.apply(up);
+            step((lrc, source, extra) => {
+                if (_mem[key] !== data)
+                    return;
+                if (hasWordTimes(lrc) && goodLrc(lrc)) {
+                    const up = Object.assign({
+                        "source": source || "NetEase",
+                        "syncedLyrics": lrc,
+                        "wordsTried": true
+                    }, extra || {});
+                    if (root.tempoVersion && up.duration > 0 && d > 0 && Math.abs(up.duration - d) > 3)
+                        up.scale = d / up.duration;
+                    root.store(key, up);
+                    if (key === root.trackKey)
+                        root.apply(up);
+                } else {
+                    run();
+                }
             });
-        });
+        };
+        run();
     }
     // YRC: `[start,len](start,len,0)word (start,len,0)word…` in ms, credits as JSON lines → enhanced LRC
     function yrcToLrc(yrc) {
@@ -950,7 +963,7 @@ Singleton {
         return out;
     }
     function entities(t) {
-        return String(t || "").replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(parseInt(n))).replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+        return String(t || "").replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(parseInt(n))).replace(/&nbsp;/g, " ").replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     }
     // synced lyrics worth showing: three timed lines with words at least (not a lone
     // "[00:00.00] instrumental, enjoy" or the credits alone)
@@ -1070,6 +1083,143 @@ Singleton {
             "nobase64": 1,
             "g_tk": 5381
         }), "https://y.qq.com/", body => cb(body && body.lyric ? root.entities(body.lyric) : null));
+    }
+
+    // ---- word-timed fetchers (also used by wordsUpgrade) ----
+    // Each calls cb(lrc, source, extra); lrc carries <mm:ss.xx> word stamps or is null.
+    readonly property string browserUa: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+    // a YouTube id from the player's metadata, when it has one (YouTube Music, browsers)
+    function youtubeId() {
+        const m = String(trackUrl || "").match(/(?:[?&]v=|youtu\.be\/|youtube\.com\/(?:shorts|embed|live)\/)([A-Za-z0-9_-]{6,})/);
+        return m ? m[1] : "";
+    }
+    function neteaseWord(c, d, cb) {
+        http("https://music.163.com/api/cloudsearch/pc?" + query({
+            "s": (c.title + " " + c.artist).trim(),
+            "type": 1,
+            "limit": 10
+        }), (code, body) => {
+            const songs = body && body.result && body.result.songs ? body.result.songs : [];
+            const match = songs.find(x => root.matches({
+                    "title": x.name,
+                    "artist": (x.ar || []).map(a => a.name).join(", "),
+                    "duration": (x.dt || 0) / 1000
+                }, c, d));
+            if (!match)
+                return cb(null, "NetEase", null);
+            http("https://music.163.com/api/song/lyric/v1?id=" + match.id + "&lv=1&yv=1", (code2, lyr) => {
+                const lrc = lyr && lyr.yrc ? root.yrcToLrc(lyr.yrc.lyric) : "";
+                cb(root.hasWordTimes(lrc) ? lrc : null, "NetEase", {
+                    "trackName": match.name,
+                    "duration": (match.dt || 0) / 1000
+                });
+            });
+        });
+    }
+    function amllWord(c, d, cb) {
+        amllFind(c, d, (lrc, hit) => cb(lrc, "AMLL", {
+                "trackName": hit ? hit.title : ""
+            }));
+    }
+    function lrclibWord(c, d, cb) {
+        http("https://lrclib.net/api/search?" + query({
+            "track_name": c.title,
+            "artist_name": c.artist
+        }), (code, list) => {
+            const ok = (Array.isArray(list) ? list : []).filter(r => root.hasWordTimes(r.syncedLyrics) && root.matches({
+                    "title": r.trackName || r.name,
+                    "artist": r.artistName,
+                    "duration": r.duration
+                }, c, d)).sort((x, y) => Math.abs((x.duration || 0) - d) - Math.abs((y.duration || 0) - d));
+            const hit = ok[0];
+            cb(hit ? hit.syncedLyrics : null, "lrclib", hit ? {
+                "trackName": hit.trackName || hit.name,
+                "duration": hit.duration || 0
+            } : null);
+        });
+    }
+    // lrc.cx mirrors Apple's catalogue and sends Apple's own word-level TTML (`lrc_ttml`)
+    function appleWord(c, d, cb) {
+        http("https://api.lrc.cx/jsonapi?" + query({
+            "title": c.title,
+            "artist": c.artist,
+            "album": fromBrowser ? "" : album
+        }), (code, list) => {
+            let hit = null, lrc = "";
+            for (const r of (Array.isArray(list) ? list : [])) {
+                if (!root.matches({
+                        "title": r.title,
+                        "artist": r.artist || "?",
+                        "duration": r.duration || 0
+                    }, c, d))
+                    continue;
+                if (r.lrc_ttml) {
+                    const t = root.ttmlToLrc(r.lrc_ttml);
+                    if (root.hasWordTimes(t) && root.goodLrc(t)) {
+                        hit = r;
+                        lrc = t;
+                        break;
+                    }
+                }
+            }
+            cb(lrc, "Apple Music", hit ? {
+                "trackName": hit.title,
+                "duration": Number(hit.duration) || 0
+            } : null);
+        });
+    }
+    // BetterLyrics' Boidu store answers with Apple-style TTML; it needs no account for
+    // its cached entries and simply refuses (401) the rest, so it is a pure fallback.
+    function betterlyricsWord(c, d, cb) {
+        curlRaw(["-H", "X-API-KEY: undefined", "-A", browserUa, "https://api.betterlyrics.org/getLyrics?" + query({
+                "s": c.title,
+                "a": c.artist,
+                "d": d > 0 ? Math.round(d) : "",
+                "videoId": youtubeId()
+            })], text => {
+            let body = null;
+            try {
+                body = JSON.parse(text);
+            } catch (e) {}
+            const lrc = body && body.ttml ? root.ttmlToLrc(body.ttml) : "";
+            cb(root.goodLrc(lrc) ? lrc : null, "BetterLyrics", {
+                "trackName": c.title
+            });
+        });
+    }
+    // Genius is plain text only: a last-resort fallback for the songs the timed stores miss
+    function geniusStep(c, d, cb) {
+        curlRaw(["-A", browserUa, "https://genius.com/api/search/multi?" + query({
+                "q": (c.artist + " " + c.title).trim()
+            })], text => {
+            let body = null;
+            try {
+                body = JSON.parse(text);
+            } catch (e) {}
+            const sections = body && body.response && body.response.sections ? body.response.sections : [];
+            let hits = [];
+            for (const s of sections)
+                if (s.type === "song")
+                    hits = hits.concat(s.hits || []);
+            const hit = hits.map(h => h.result).find(r => r && r.url && /-lyrics$/.test(r.url) && root.matches({
+                    "title": r.title,
+                    "artist": r.primary_artist ? r.primary_artist.name : ""
+                }, c, d));
+            if (!hit)
+                return cb(null, null);
+            curlRaw(["-A", browserUa, hit.url], html => cb(root.geniusPlain(html), hit.title));
+        });
+    }
+    // the lyric blocks of a Genius page as plain text
+    function geniusPlain(html) {
+        const re = /<div[^>]*data-lyrics-container="true"[^>]*>([\s\S]*?)<\/div>/g;
+        let out = "", m;
+        while ((m = re.exec(String(html || ""))))
+            out += m[1] + "\n";
+        if (!out.trim())
+            return "";
+        out = entities(out.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, ""));
+        return out.split(/\r?\n/).map(l => l.trim()).filter(l => l !== "" && !/^\[[^\]]*\]$/.test(l) && !/^\d+\s+Contributors?/i.test(l)).join("\n");
     }
 
     // ---- source chain, in the order chosen in Settings → Lyrics; then once more with the
@@ -1243,8 +1393,10 @@ Singleton {
                         }, c, d));
                     if (!match)
                         return next();
-                    http("https://music.163.com/api/song/lyric?id=" + match.id + "&lv=1", (code2, lyr) => {
-                        const lrc = lyr && lyr.lrc ? root.stripCredits(lyr.lrc.lyric) : "";
+                    http("https://music.163.com/api/song/lyric/v1?id=" + match.id + "&lv=1&yv=1", (code2, lyr) => {
+                        // YRC carries the words' own times when NetEase has them
+                        const yrc = lyr && lyr.yrc ? root.yrcToLrc(lyr.yrc.lyric) : "";
+                        const lrc = root.hasWordTimes(yrc) && root.goodLrc(yrc) ? yrc : lyr && lyr.lrc ? root.stripCredits(lyr.lrc.lyric) : "";
                         if (root.goodLrc(lrc))
                             done({
                                 "source": "NetEase",
@@ -1301,21 +1453,54 @@ Singleton {
                             next();
                     });
                 });
-            // lrc.cx (LrcApi): a large mirror of the Chinese stores plus Apple Music
+            // lrc.cx (LrcApi): a large mirror of the Chinese stores plus Apple Music.
+            // Apple's entries carry its own word-level TTML (`lrc_ttml`); when it is
+            // there it wins over the line-timed `lrc` from the same catalogue.
             steps.lrccx = (next, done) => http("https://api.lrc.cx/jsonapi?" + query({
                         "title": c.title,
                         "artist": c.artist,
                         "album": fromBrowser || again ? "" : album
                     }), (code, list) => {
-                    const match = (Array.isArray(list) ? list : []).find(r => root.goodLrc(r.lrc) && root.matches({
+                    const ok = (Array.isArray(list) ? list : []).filter(r => root.matches({
                             "title": r.title,
                             "artist": r.artist || "?",
                             "duration": r.duration || 0
                         }, c, d));
+                    for (const r of ok) {
+                        if (!r.lrc_ttml)
+                            continue;
+                        const t = root.ttmlToLrc(r.lrc_ttml);
+                        if (root.goodLrc(t))
+                            return done(root.lrcData("Apple Music", t, {
+                                "trackName": r.title,
+                                "duration": Number(r.duration) || 0
+                            }));
+                    }
+                    const match = ok.find(r => root.goodLrc(r.lrc));
                     match ? done(root.lrcData("lrc.cx", match.lrc, {
                         "trackName": match.title
                     })) : next();
                 });
+            // BetterLyrics: its cached Boidu entries are Apple TTML, keyless
+            steps.betterlyrics = (next, done) => root.betterlyricsWord(c, d, (lrc, source, extra) => {
+                    if (root.goodLrc(lrc))
+                        done(root.lrcData(source, lrc, extra));
+                    else
+                        next();
+                });
+            // Genius: plain text only, so it comes after every timed store
+            steps.genius = (next, done) => {
+                if (plain || !c.artist)
+                    return next();
+                root.geniusStep(c, d, text => {
+                    if (text && text.trim())
+                        plain = {
+                            "source": "Genius",
+                            "plainLyrics": text.trim()
+                        };
+                    next();
+                });
+            };
             // Musixmatch: the biggest catalogue; its anonymous token is refused in some
             // countries (the answer then is made-up words — matches() throws them out)
             steps.musixmatch = (next, done) => root.mxmFind(c, d, data => {
@@ -1349,7 +1534,7 @@ Singleton {
         if (alt) {
             const second = build(alt, true);
             for (const src of order)
-                if (["lrclib", "netease", "lrccx", "kugou"].includes(src))
+                if (["lrclib", "netease", "lrccx", "kugou", "betterlyrics", "genius"].includes(src))
                     steps.push(...[].concat(second[src]));
         }
         _offline = false;

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "angelos.lyrics",
   "name": "Live Lyrics",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "author": "Iliya Brook",
   "license": "MIT",
   "repository": "https://github.com/ilyamaximusaws/omarchy-live-lyrics",
@@ -31,7 +31,9 @@
       "searchInMessengers": false,
       "artwork": "cover",
       "opacity": 100,
-      "maxWidth": 500
+      "maxWidth": 500,
+      "offsetMs": 0,
+      "sources": ""
     },
     "schema": [
       {
@@ -104,6 +106,23 @@
         "max": 1200,
         "step": 20,
         "defaultValue": 500
+      },
+      {
+        "key": "offsetMs",
+        "type": "integer",
+        "label": "Lyrics offset (ms)",
+        "description": "Shift lyrics earlier (negative) or later (positive) than the player's position.",
+        "min": -3000,
+        "max": 3000,
+        "step": 50,
+        "defaultValue": 0
+      },
+      {
+        "key": "sources",
+        "type": "string",
+        "label": "Lyrics sources",
+        "description": "Comma-separated search order, e.g. lrclib, amll, netease, apple, genius. Keys: local, player, lrclib, amll, netease, kugou, qq, lrccx (Apple Music), musixmatch, genius, betterlyrics, ovh. Empty keeps the built-in order. Word-timed results win over line-timed ones whichever source has them.",
+        "defaultValue": ""
       }
     ]
   }

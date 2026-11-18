@@ -39,10 +39,39 @@ Singleton {
         "wordLeadMs": 150,
         "typewriter": true,
         "screens": [],              // [] = every screen
-        "sources": ["local", "player", "lrclib", "amll", "netease", "kugou", "qq", "lrccx", "musixmatch", "ovh"]
+        // the order the engine searches in; [] = the engine's own list (lrclib first,
+        // then the word-timed stores and the rest as fallbacks)
+        "sources": []
     })
 
     property var lyrics: defaults
+
+    // "lrclib, netease, apple" → ["lrclib", "netease", "lrccx"]; unknown names dropped,
+    // duplicates removed, [] when nothing usable is left (the engine's default order)
+    readonly property var sourceAliases: ({
+        "apple": "lrccx",
+        "apple music": "lrccx",
+        "apple-music": "lrccx",
+        "applemusic": "lrccx",
+        "lrc.cx": "lrccx",
+        "lrc.cx / apple": "lrccx",
+        "better lyrics": "betterlyrics",
+        "better-lyrics": "betterlyrics"
+    })
+    readonly property var sourceNames: ["local", "player", "lrclib", "amll", "netease", "kugou", "qq", "lrccx", "musixmatch", "genius", "betterlyrics", "ovh"]
+    function parseSources(value) {
+        var list = Array.isArray(value) ? value : String(value || "").split(",")
+        var out = []
+        for (var i = 0; i < list.length; i++) {
+            var s = String(list[i] || "").trim().toLowerCase()
+            if (!s)
+                continue
+            s = sourceAliases[s] || s
+            if (sourceNames.indexOf(s) >= 0 && out.indexOf(s) < 0)
+                out.push(s)
+        }
+        return out
+    }
 
     // patch one or more settings; always assigns a fresh object so bindings react
     function setLyrics(patch) {
