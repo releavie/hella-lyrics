@@ -61,7 +61,10 @@ Singleton {
     readonly property var _followed: ({
             "player": null
         })
-    onPlayerChanged: _followed.player = player
+    onPlayerChanged: {
+        _followed.player = player;
+        resetPosition();
+    }
     readonly property var musicApps: /spotify|yandex|vk ?music|vkmusic|deezer|tidal|apple ?music|cider|amberol|rhythmbox|elisa|strawberry|clementine|audacious|lollypop|quodlibet|cmus|mpd|ncspot|spotube|feishin|sonixd|supersonic|youtube.?music|ytmusic|soundcloud|nuclear|harmonoid|tauon|g4music|gapless|euphonica|musikcube|deadbeef|foobar|museeks|kew|termusic|plexamp|jellyfin|navidrome|psst|sayonara|mpv|vlc|celluloid|haruna/i
     // What a messenger publishes over MPRIS is not a track: the "artist" of a voice message is
     // the sender's name and its "title" the time it was sent, and a call has neither. Such a
@@ -252,6 +255,7 @@ Singleton {
     onTrackKeyChanged: {
         // consent is for the track it was given on: the next one asks again
         _consentKey = "";
+        resetPosition();
         fetchTimer.restart();
     }
     // nobody sees a line: locked, or every screen that shows one is under a fullscreen window.
@@ -277,7 +281,11 @@ Singleton {
         running: root.playing && root.status === "ok" && root.lines.length > 0 && !root.unseen
 
         onTriggered: {
-            root.player.positionChanged();
+            // the reader lost the player (SIGSTOP, a hung bus call): the line is already
+            // held by positionNow; say so too, for the beat grid and diagnostics
+            if (root.livePosition && root.playing && root._lastSampleAt > 0
+                    && Date.now() - root._lastSampleAt > 2600 && !root.stalled)
+                root.stalled = true;
             root.updateIndex();
             let next = root.index + 1 < root.lines.length ? root.lines[root.index + 1].t : -1;
             if (root.wordTimed) {
@@ -290,17 +298,152 @@ Singleton {
         }
     }
 
+    // ---- the player's own clock -------------------------------------------------
+    // Quickshell's `MprisPlayer.position` is the last Position the player reported plus
+    // the wall-clock time since: it never asks again. A player that buffers, stalls or
+    // seeks without announcing it (Sonora does all three) leaves the lyrics running on
+    // their own. So the real Position is read from the player over D-Bus while a line is
+    // on screen, and that sample - not the extrapolation - is what the lines follow.
+    // One `sh` reads it twice a second; the shell keeps it for the whole song.
+    property double _realPos: 0      // song seconds at the last sample
+    property double _realAt: 0       // Date.now() of the first sample of that value
+    property double _lastSampleAt: 0 // Date.now() of the last successful sample
+    property double _holdPos: 0      // the last real estimate, held while nothing moves
+    property double _stallPos: 0     // position when the current no-progress run began
+    property double _stallAt: 0      // Date.now() when it began
+    property bool livePosition: false
+    property bool stalled: false
+    // a player that does not expose Position keeps the old extrapolated behaviour
+    readonly property bool positionLive: livePosition
+    readonly property string playerBus: player ? String(player.dbusName || "") : ""
+    // "x 175487666" (microseconds) from `busctl get-property … Position`
+    function samplePosition(text) {
+        const m = String(text || "").match(/^\s*x\s+(\d+)\s*$/);
+        if (!m)
+            return;
+        const us = Number(m[1]);
+        if (!isFinite(us) || us < 0)
+            return;
+        const pos = us / 1000000, now = Date.now();
+        if (!livePosition) {
+            livePosition = true;
+            stalled = false;
+            _realPos = pos;
+            _realAt = now;
+            _stallPos = pos;
+            _stallAt = now;
+        } else {
+            const song = positionNow();
+            // a jump the clock cannot explain is a seek (or a player resync): snap
+            if (pos < _realPos - 0.75 || pos > song + 1.5) {
+                stalled = false;
+                _realPos = pos;
+                _realAt = now;
+                _stallPos = pos;
+                _stallAt = now;
+            } else if (pos > _realPos + 0.02) {
+                // the player moved on: this value was true since this sample
+                _realPos = pos;
+                _realAt = now;
+                if (pos > _stallPos + 0.2) {
+                    _stallPos = pos;
+                    _stallAt = now;
+                    stalled = false;
+                }
+            }
+            // else the player still reports the old value (its own ~1 s granularity):
+            // keep the earlier timestamp, so the interpolation stays smooth
+            if (!stalled && now - _stallAt > 1800 && _realPos - _stallPos < 0.2)
+                stalled = true;
+        }
+        _lastSampleAt = now;
+        // the estimate at the last time the player answered: what a stall holds
+        _holdPos = _realPos + Math.max(0, Math.min(2.5, (now - _realAt) / 1000));
+        updateIndex();
+    }
+    // the song position the line should use right now (offset applied by updateIndex)
+    function positionNow() {
+        if (!livePosition)
+            return player ? player.position : 0;
+        // paused, stalled, or the player stopped answering: hold the last real estimate,
+        // never step back to the raw sample
+        if (!playing || stalled)
+            return _holdPos;
+        if (_lastSampleAt > 0 && Date.now() - _lastSampleAt > 2600)
+            return _holdPos;
+        let age = (Date.now() - _realAt) / 1000;
+        // samples should arrive twice a second; if they stop, do not run away
+        if (!(age >= 0))
+            age = 0;
+        if (age > 2.5)
+            age = 2.5;
+        return _realPos + age;
+    }
+    // "Anchor at the sample that moved" bookkeeping: _realAt belongs to _realPos only
+    function resetPosition() {
+        livePosition = false;
+        stalled = false;
+        _realPos = 0;
+        _realAt = 0;
+        _lastSampleAt = 0;
+        _holdPos = 0;
+        _stallPos = 0;
+        _stallAt = 0;
+        // a fresh anchor for the new player/song, never the previous one
+        if (posPoll.running)
+            posPoll.running = false;
+        pollWatch.restart();
+    }
+    Process {
+        id: posPoll
+        property string bus: ""
+        running: false
+        command: ["sh", "-c", 'b="$1"; while :; do busctl --user get-property "$b" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Position 2>/dev/null || echo; sleep 0.55; done', "sh", bus]
+        stdout: SplitParser {
+            onRead: line => root.samplePosition(line)
+        }
+    }
+    // keeps the reader alive only while a line is being shown; restarts it when the
+    // player or the song changes
+    Timer {
+        id: pollWatch
+        interval: 800
+        repeat: true
+        running: true
+        onTriggered: root.ensurePositionPoll()
+    }
+    function ensurePositionPoll() {
+        const want = playing && status === "ok" && lines.length > 0 && !unseen && playerBus !== "";
+        if (!want) {
+            if (posPoll.running)
+                posPoll.running = false;
+            return;
+        }
+        if (posPoll.running && posPoll.bus === playerBus)
+            return;
+        posPoll.running = false;
+        posPoll.bus = playerBus;
+        posPoll.command = ["sh", "-c", 'b="$1"; while :; do busctl --user get-property "$b" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Position 2>/dev/null || echo; sleep 0.55; done', "sh", playerBus];
+        posPoll.running = true;
+    }
+
     Connections {
         target: root.player
         ignoreUnknownSignals: true
         function onPostTrackChanged() {
             root.index = -1;
+            root.resetPosition();
         }
         function onPlaybackStateChanged() {
             if (root.player) {
-                root.player.positionChanged();
+                // a resume has a new anchor; a pause holds the last one
+                if (root.playing)
+                    root.resetPosition();
                 root.updateIndex();
             }
+        }
+        function onSeeked() {
+            root.resetPosition();
         }
     }
 
@@ -314,7 +457,7 @@ Singleton {
     function updateIndex() {
         if (!player || lines.length === 0)
             return;
-        position = player.position + Lib.Config.lyrics.offsetMs / 1000;
+        position = positionNow() + Lib.Config.lyrics.offsetMs / 1000;
         let i = index;
         if (i < 0 || i >= lines.length || lines[i].t > position)
             i = -1;

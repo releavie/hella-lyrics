@@ -16,7 +16,7 @@ import "RhythmCore.js" as Core
 Singleton {
     id: root
 
-    readonly property bool wanted: Lib.Config.lyrics.byWord !== false && Lib.Config.lyrics.onBeat !== false && Lib.Lyrics.playing && Lib.Lyrics.status === "ok" && !Lib.Lyrics.unseen && Lib.Lyrics.lines.some(l => !!l.s)
+    readonly property bool wanted: Lib.Config.lyrics.byWord !== false && Lib.Config.lyrics.onBeat !== false && Lib.Lyrics.playing && !Lib.Lyrics.stalled && Lib.Lyrics.status === "ok" && !Lib.Lyrics.unseen && Lib.Lyrics.lines.some(l => !!l.s)
     property var beat: Core.newBeat()
     property bool locked: false
     readonly property real half: beat.P / 2  // ms between the places a word may land

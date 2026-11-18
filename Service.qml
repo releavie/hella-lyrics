@@ -46,6 +46,8 @@ Item {
                 // diagnostics for the reveal: a line that arrives mid-song has to
                 // be distinguishable from one that starts from its own zero
                 "position": Math.round(Lib.Lyrics.position * 100) / 100,
+                "positionLive": Lib.Lyrics.positionLive,
+                "stalled": Lib.Lyrics.stalled,
                 "index": Lib.Lyrics.index,
                 "wordTimed": Lib.Lyrics.wordTimed,
                 "wordChars": Lib.Lyrics.wordChars,
