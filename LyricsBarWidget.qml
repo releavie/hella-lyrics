@@ -538,10 +538,15 @@ BarWidget {
                 // matching their glyphs; media controls are not mirrored.
                 LayoutMirroring.enabled: false
                 LayoutMirroring.childrenInherit: true
-
+                // The play glyph is larger than the other three; without one height
+                // the buttons size to their own glyphs and the row top-aligns them,
+                // leaving previous/next visibly higher than play. The others take
+                // play's own implicit height, so their centres line up and a theme
+                // that changes the glyph sizes keeps them lined up.
                 Button {
                     iconText: "󰒮"
                     foreground: root.tint
+                    height: playButton.implicitHeight
                     horizontalPadding: Style.spacing.controlPaddingX
                     verticalPadding: Style.spacing.controlPaddingY
                     enabled: root.canPrev
@@ -550,6 +555,7 @@ BarWidget {
                 }
 
                 Button {
+                    id: playButton
                     iconText: root.popupPlayer && root.popupPlayer.isPlaying ? "󰏤" : "󰐊"
                     foreground: root.tint
                     horizontalPadding: Style.spacing.panelGap
@@ -563,6 +569,7 @@ BarWidget {
                 Button {
                     iconText: "󰒭"
                     foreground: root.tint
+                    height: playButton.implicitHeight
                     horizontalPadding: Style.spacing.controlPaddingX
                     verticalPadding: Style.spacing.controlPaddingY
                     enabled: root.canNext
@@ -575,6 +582,7 @@ BarWidget {
                 Button {
                     iconText: "󰒓"
                     foreground: root.tint
+                    height: playButton.implicitHeight
                     horizontalPadding: Style.spacing.controlPaddingX
                     verticalPadding: Style.spacing.controlPaddingY
                     selected: root.settingsOpen
