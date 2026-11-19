@@ -11,6 +11,8 @@ A port of the angelOS lyrics bar and engine by
 shell plugin system. See [`THIRD-PARTY.md`](THIRD-PARTY.md) for what was ported,
 what was changed, and what is not bundled.
 
+![Hella Lyrics in the Omarchy bar](docs/front-page.png)
+
 ## What it does
 
 - **Synced lines in the bar** — the current line, as wide as it needs (up to a
