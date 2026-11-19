@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "hella.lyrics",
   "name": "Hella Lyrics",
-  "version": "1.3.5",
-  "author": "Iliya Brook",
+  "version": "1.0.0",
+  "author": "releavie",
   "license": "MIT",
-  "repository": "https://github.com/ilyamaximusaws/omarchy-live-lyrics",
+  "repository": "https://github.com/releavie/hella-lyrics",
   "description": "Hella Lyrics: live synchronized lyrics in your bar: character-by-character reveal, word-by-word karaoke, beat alignment grid, and loudness glow. A port of the angelOS lyrics bar and engine by MixaDoDs (MIT).",
   "kinds": [
     "bar-widget",

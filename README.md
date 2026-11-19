@@ -55,7 +55,7 @@ the plugin never runs package management itself. The beat grid works without
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/ilyamaximusaws/omarchy-live-lyrics.git --enable
+omarchy plugin add https://github.com/releavie/hella-lyrics.git --enable
 ```
 
 Then place the widget: `omarchy plugin enable hella.lyrics center` (or move it
@@ -205,5 +205,6 @@ omarchy plugin validate .
 
 ## License
 
-MIT, © 2026 MixaDoDs (the original angelOS lyrics bar and engine) and
-© 2026 Iliya Brook (the Omarchy port). Full text in [`LICENSE`](LICENSE).
+MIT, © 2026 MixaDoDs (the original angelOS lyrics bar and engine),
+© 2026 Iliya Brook (the Omarchy port), and © 2026 releavie (the Hella Lyrics
+rebrand and release). Full text in [`LICENSE`](LICENSE).

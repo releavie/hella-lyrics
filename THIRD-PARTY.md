@@ -4,15 +4,16 @@ This plugin is a port. Its lyrics bar, the lyrics engine, the beat grid, the
 loudness glow and the helper scripts come from **angelOS** by MixaDoDs, under
 the MIT license. The port to the Omarchy shell plugin system — the manifest, the
 bar widget, the service entry point, the MPRIS player popup and the inline
-settings — is Iliya Brook's.
+settings — is Iliya Brook's. Hella Lyrics is the rebrand and release by releavie.
 
-Both are covered by MIT; the full text with both copyright lines is in
+Both are covered by MIT; the full text with the copyright lines is in
 [`LICENSE`](LICENSE).
 
 | What | Where | License | Source |
 |---|---|---|---|
 | The lyrics bar, the lyrics engine, the beat grid, the loudness glow, the helper scripts (ported) | `LyricsBarWidget.qml`, `Service.qml`, `lib/`, `scripts/` | MIT, © 2026 MixaDoDs | [MixaDoDs/AngelOS-Dotfiles](https://github.com/MixaDoDs/AngelOS-Dotfiles) |
 | The Omarchy port: manifest, widget wiring, player popup, inline settings | the same files | MIT, © 2026 Iliya Brook | [ilyamaximusaws/omarchy-live-lyrics](https://github.com/ilyamaximusaws/omarchy-live-lyrics) |
+| The Hella Lyrics rebrand, sync and source fixes, release | the same files | MIT, © 2026 releavie | [releavie/hella-lyrics](https://github.com/releavie/hella-lyrics) |
 
 ## What was changed in the port
 
