@@ -11,6 +11,13 @@ import "." as Lib
 Singleton {
     id: root
 
+    // make the user's config directory before the override reader looks there
+    Process {
+        id: ensureWordTimesDir
+        command: ["sh", "-c", 'mkdir -p "$0"', Lib.Paths.configDir]
+    }
+    Component.onCompleted: ensureWordTimesDir.running = true
+
     readonly property var players: Mpris.players.values
     // the player whose song this is: playing beats paused, the preferred one beats the rest,
     // a music player beats a browser, and a messenger's voice message or a call never takes
@@ -286,6 +293,103 @@ Singleton {
                 out[key] = l[key].map(x => x * k);
         return out;
     }
+
+    // ---- hand-edited word times ---------------------------------------------
+    // ~/.config/omarchy/angelos.lyrics/word-times.json (see README) can pin exact
+    // word starts for a track. It wins over every network source and over the
+    // syllable guess; changing track or refetching reloads an edited file.
+    property string wordTimesFile: Lib.Paths.wordTimesFile
+    property var _wordTimes: ({})
+    readonly property bool wordsOverridden: wordTimed && index >= 0 && index < lines.length
+        && lines[index].custom === true
+
+    function overrideKey(a, t) {
+        const ak = key(a), tk = key(t);
+        return ak && tk ? ak + "|" + tk : "";
+    }
+    function parseWordTimes(text) {
+        const map = {};
+        try {
+            const doc = JSON.parse(String(text || ""));
+            const tracks = Array.isArray(doc) ? doc : (doc.tracks || []);
+            for (const tr of tracks) {
+                if (!tr || !Array.isArray(tr.lines))
+                    continue;
+                const k = overrideKey(tr.artist || "", tr.title || "");
+                if (!k)
+                    continue;
+                const lines = [];
+                for (const src of tr.lines) {
+                    let w = src.w, s = src.s;
+                    if (!w && Array.isArray(src.words)) {
+                        w = [];
+                        s = [ "" ];
+                        for (const word of src.words) {
+                            if (!word)
+                                continue;
+                            w.push(Number(word.at !== undefined ? word.at : word.t) || 0);
+                            s.push(String(word.text || ""));
+                        }
+                    }
+                    if (!Array.isArray(w) || !Array.isArray(s) || s.length !== w.length + 1)
+                        continue;
+                    lines.push({
+                        "t": Number(src.t) || 0,
+                        "text": String(src.text || ""),
+                        "w": w.map(x => Number(x) || 0),
+                        "s": s.map(x => String(x))
+                    });
+                }
+                if (lines.length)
+                    map[k] = lines;
+            }
+        } catch (e) {}
+        return map;
+    }
+    function reloadWordTimes() {
+        wordTimesReader.path = root.wordTimesFile;
+        wordTimesReader.reload();
+    }
+    FileView {
+        id: wordTimesReader
+        path: root.wordTimesFile
+        printErrors: false
+        onLoaded: root._wordTimes = root.parseWordTimes(text())
+        onLoadFailed: root._wordTimes = {}
+    }
+    onWordTimesFileChanged: root.reloadWordTimes()
+    function overrideEntry(a, t) {
+        return root._wordTimes[overrideKey(a === undefined ? artist : a, t === undefined ? title : t)] || null;
+    }
+    // Replace a line's guessed times with the track's hand-edited ones. Lines are
+    // matched by their start time (and, when given, their text) so an edit survives
+    // a small change in an LRC's line timing.
+    function applyWordTimes(ls, a, t) {
+        const entry = overrideEntry(a, t);
+        if (!entry)
+            return ls;
+        const out = ls.slice();
+        for (let i = 0; i < out.length; i++) {
+            const l = out[i];
+            let best = null, closest = 0.75;
+            for (const o of entry) {
+                if (o.text && key(o.text) !== key(l.text))
+                    continue;
+                const delta = Math.abs(o.t - l.t);
+                if (delta < closest) {
+                    best = o;
+                    closest = delta;
+                }
+            }
+            if (!best)
+                continue;
+            const timed = Object.assign({}, l, { "w": best.w.slice(), "s": best.s.slice(), "custom": true });
+            delete timed.ws;
+            out[i] = timed;
+        }
+        return out;
+    }
+
     property bool visibleToggle: true
 
     property var _mem: ({})
@@ -295,6 +399,7 @@ Singleton {
         // consent is for the track it was given on: the next one asks again
         _consentKey = "";
         resetPosition();
+        reloadWordTimes();   // the user may have edited the file since the last track
         fetchTimer.restart();
     }
     // nobody sees a line: locked, or every screen that shows one is under a fullscreen window.
@@ -580,7 +685,7 @@ Singleton {
             status = "instrumental";
         } else if (data.syncedLyrics) {
             const k = data.scale > 0.5 && data.scale < 2 ? data.scale : 1;
-            lines = estimateWords(parseLrc(data.syncedLyrics).map(l => scaleLine(l, k)), length);
+            lines = estimateWords(applyWordTimes(parseLrc(data.syncedLyrics).map(l => scaleLine(l, k))), length);
             status = lines.length ? "ok" : "notfound";
             wordsUpgrade(trackKey, data);
         } else if (data.plainLyrics) {
@@ -607,6 +712,7 @@ Singleton {
         if (!title)
             return;
         _consentKey = trackKey;
+        reloadWordTimes();
         delete _mem[trackKey];
         lines = [];
         index = -1;
@@ -1019,9 +1125,9 @@ Singleton {
     }
     function wordsUpgrade(key, data) {
         // another network round trip: never for a track that may not leave the machine,
-        // never under a pinned provider (its answer is the one the user asked for), and never
-        // over a local file or the player's own text
-        if (netBlocked || pinnedSource || Lib.Config.lyrics.byWord === false || !data || !data.syncedLyrics || data.source === "local" || data.source === "player" || data.lrclibChecked)
+        // never under a pinned provider (its answer is the one the user asked for), never over
+        // a local file or the player's own text, and never over hand-edited word times
+        if (netBlocked || pinnedSource || overrideEntry() || Lib.Config.lyrics.byWord === false || !data || !data.syncedLyrics || data.source === "local" || data.source === "player" || data.lrclibChecked)
             return;
         // An entry cached before lrclib's `lyricsfile` was read upgraded (or came whole) with
         // another store's words while lrclib had the words' own times all along. Ask lrclib

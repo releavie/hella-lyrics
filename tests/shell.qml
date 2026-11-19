@@ -241,6 +241,39 @@ ShellRoot {
         ok("kana and Han words are weighed per character",
            cjk.ws.length === 3 && Math.abs(cjk.ws[1] - 0.6) < 0.01 && Math.abs(cjk.ws[2] - 1.5) < 0.01,
            JSON.stringify(cjk.ws))
+        // ---- hand-edited word times ----
+        var overrideJson = JSON.stringify({ "tracks": [ {
+            "artist": "The Kid LAROI", "title": "PICK SIDES",
+            "lines": [ { "t": 12.34, "text": "one two", "words": [
+                { "text": "one", "at": 12.34 }, { "text": " two", "at": 12.8 }
+            ] } ]
+        } ] })
+        var parsedOverride = lyr.parseWordTimes(overrideJson)
+        var overrideK = lyr.overrideKey("The Kid LAROI", "PICK SIDES")
+        ok("a custom word-times file parses into track entries",
+           parsedOverride[overrideK] && parsedOverride[overrideK].length === 1
+           && parsedOverride[overrideK][0].w[1] === 12.8
+           && parsedOverride[overrideK][0].s.join("") === "one two",
+           JSON.stringify(parsedOverride[overrideK]))
+        lyr._wordTimes = parsedOverride
+        ok("an override is found for its track", lyr.overrideEntry("The Kid LAROI", "PICK SIDES") !== null)
+        var customLines = lyr.applyWordTimes(lyr.parseLrc("[00:12.34]one two\n[00:15.00]three four"),
+                                             "The Kid LAROI", "PICK SIDES")
+        ok("custom words replace the guessed ones for that line",
+           customLines[0].w.length === 2 && customLines[0].ws === undefined
+           && customLines[0].custom === true && customLines[1].custom === undefined
+           && customLines[0].s.join("") === "one two",
+           JSON.stringify(customLines[0]))
+        ok("lines without a custom entry are left for the estimator", customLines[1].w === undefined)
+        var afterEstimate = lyr.estimateWords(customLines, 20)
+        ok("the estimator leaves hand-edited words alone",
+           afterEstimate[0].w[1] === 12.8 && afterEstimate[0].ws === undefined,
+           JSON.stringify(afterEstimate[0]))
+        ok("and guesses only the untouched lines", afterEstimate[1].ws !== undefined)
+        ok("a different track keeps its own words",
+           lyr.applyWordTimes(lyr.parseLrc("[00:12.34]one two"), "Nobody", "Nothing")[0].ws === undefined)
+        lyr._wordTimes = {}
+
         var stretched = lyr.scaleLine({ "t": 1, "w": [ 1.1, 1.4 ], "ws": [ 1.05, 1.35 ] }, 2)
         ok("a tempo version stretches every word time, guessed or not",
            stretched.t === 2 && Math.abs(stretched.w[1] - 2.8) < 0.001

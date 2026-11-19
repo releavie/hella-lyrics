@@ -1,0 +1,26 @@
+{
+  "tracks": [
+    {
+      "artist": "Example Artist",
+      "title": "Example Song",
+      "lines": [
+        {
+          "t": 12.34,
+          "text": "It's getting late",
+          "words": [
+            { "text": "It's", "at": 12.34 },
+            { "text": " getting", "at": 12.56 },
+            { "text": " late", "at": 13.12 }
+          ]
+        },
+        {
+          "t": 16.00,
+          "words": [
+            { "text": "Another", "at": 16.00 },
+            { "text": " line", "at": 16.45 }
+          ]
+        }
+      ]
+    }
+  ]
+}

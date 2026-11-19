@@ -121,6 +121,22 @@ per character where a word is written in kana, Han or Hangul); a source that
 supplied its own word times is never re-estimated, and a sped-up or slowed-down
 track stretches every word time with the line.
 
+### Exact words for one song
+
+When no source has word times, you can supply them yourself in
+`~/.config/omarchy/angelos.lyrics/word-times.json`
+(`$XDG_CONFIG_HOME/omarchy/angelos.lyrics/word-times.json` if set). The directory
+is created on first start; see [`examples/word-times.json`](examples/word-times.json)
+for the format. A track is matched by artist and title, a line by its start time
+(`t`, in seconds) and optionally its `text`; `words[].text` includes the space
+before a word where there is one, and `at` is the song time when that word
+appears.
+
+A custom entry wins over every network source and over the syllable guess, is
+not beat-snapped, and the card says `custom word times`. Edit the file and
+change track (or press «Search» in the card) to reload it. The «Words ahead»
+slider still shifts these times, just as it shifts a provider's own words.
+
 A line-timed result is shown as soon as it arrives. The word-capable sources
 then get one chance each, in the same order, and the line is replaced if one
 has the words' own times: word timing wins over the source order without

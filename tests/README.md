@@ -14,7 +14,7 @@ cache and state are not in the picture.
 Every line printed starts with PORTTEST; the last line is the summary:
 
     ... | grep PORTTEST | grep -c PASS      # pass count
-    ... | grep PORTTEST SUMMARY             # "131/131"
+    ... | grep PORTTEST SUMMARY             # "138/138"
 
 Notes:
 
