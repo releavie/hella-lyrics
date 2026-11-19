@@ -465,17 +465,24 @@ ShellRoot {
                w.providerOptions.length > 5 && w.providerOptions[0].value === ""
                && w.providerOptions.some(function (o) { return o.value === "lrclib" && o.label.indexOf("LrcLib") >= 0 }),
                "n=" + w.providerOptions.length)
+            ok("the switcher covers every source the engine knows",
+               w.lyr.allSources.every(function (s) {
+                   return w.providerOptions.some(function (o) { return o.value === s })
+               }), "sources=" + w.lyr.allSources.join(","))
             fakeBar.writes = []
             w.bar = fakeBar
             // "local" keeps the check off the network: pinning it asks a file source
             w.saveSetting("provider", "local")
             ok("pinning a provider applies at once", w.provider === "local", "provider=" + w.provider)
+            ok("the pin reaches the engine at once", w.lyr.pinnedSource === "local",
+               "engine pin=" + w.lyr.pinnedSource)
             ok("the pin is persisted",
                fakeBar.writes.length === 1 && fakeBar.writes[0].entry.provider === "local",
                JSON.stringify(fakeBar.writes))
             w.saveSetting("provider", "")
             ok("auto is a provider choice too",
-               w.provider === "" && w.sourceStatus.length > 0, w.sourceStatus)
+               w.provider === "" && w.lyr.pinnedSource === "" && w.sourceStatus.length > 0,
+               w.sourceStatus)
             w.bar = null
 
             // ---- words ahead: the popup's own lead, in song milliseconds ----

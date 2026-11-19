@@ -128,7 +128,7 @@ BarWidget {
     // ---- the player popup ----------------------------------------------------
     // a small transport card anchored to this widget: cover, title, pause/next/previous
     property bool popupOpen: false
-    // the popup's own settings row (opacity), collapsed until the gear is hit
+    // the popup's sliders (opacity, words ahead), collapsed until the gear is hit
     property bool settingsOpen: false
     function togglePopup() { popupOpen = !popupOpen }
     // the bar calls this when it hides; a popup anchored to a hidden bar must not stay
@@ -624,6 +624,34 @@ BarWidget {
                 }
             }
 
+            // ---- where the line comes from ----
+            // The switcher is part of the card itself, not a hidden settings row: the
+            // provider that is pinned (or Auto) and the source that actually answered
+            // are both readable the moment the card opens, and a pick refetches at once.
+            Column {
+                width: parent.width
+                spacing: Style.space(4)
+
+                Dropdown {
+                    width: parent.width
+                    foreground: root.tint
+                    label: "Lyrics provider"
+                    value: root.provider
+                    options: root.providerOptions
+                    onChanged: function (v) { root.saveSetting("provider", v) }
+                }
+
+                Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: root.sourceStatus
+                    color: Qt.darker(root.tint, 1.3)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                }
+            }
+
             // ---- a messenger's voice message: search only when asked ----
             // Its MPRIS "artist" is the sender's name and its "title" the time it was sent, so
             // the engine keeps those off the lyrics services by itself. This is the one action
@@ -657,32 +685,11 @@ BarWidget {
                 }
             }
 
-            // ---- settings: where the line comes from, how it moves, how solid it is ----
+            // ---- settings: how it moves, how solid it is ----
             Column {
                 width: parent.width
                 spacing: Style.space(4)
                 visible: root.settingsOpen
-
-                // the provider switcher: pin one store (and refetch at once), or let the
-                // search order choose. The line under it says what actually answered.
-                Dropdown {
-                    width: parent.width
-                    foreground: root.tint
-                    label: "Lyrics provider"
-                    value: root.provider
-                    options: root.providerOptions
-                    onChanged: function (v) { root.saveSetting("provider", v) }
-                }
-
-                Text {
-                    textFormat: Text.PlainText
-                    width: parent.width
-                    text: root.sourceStatus
-                    color: Qt.darker(root.tint, 1.3)
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
-                }
 
                 Item {
                     width: parent.width

@@ -89,10 +89,11 @@ Set through the shell's plugin settings (they live in your
 | `preferPlayer` | — | substring of the player to prefer when several are running |
 | `searchInMessengers` | `false` | search a messenger's voice messages online too, without asking per message |
 
-`opacity` and `wordLeadMs` also have sliders in the player card (the gear in its
-transport row), and `provider` has a dropdown there. Drags preview live and only
-the release is saved. `provider` is deliberately not in the shell's settings
-schema: the choice belongs in the card, next to the lyrics it changes.
+The provider dropdown sits in the player card itself, so the current choice and
+the source that answered are visible as soon as the card opens. `opacity` and
+`wordLeadMs` live behind the gear in its transport row; their drags preview live
+and only the release is saved. `provider` is deliberately not in the shell's
+settings schema: the choice belongs in the card, next to the lyrics it changes.
 
 ### Sources
 

@@ -39,7 +39,7 @@ Singleton {
         // 0 = a word comes up on its own time, as the player's own karaoke shows it; a
         // positive value brings it up early for singing along
         "wordLeadMs": 0,
-        // one provider pinned from the player card: "" = the chain above, otherwise only
+        // one provider pinned from the player card: "" = the search order, otherwise only
         // that source is asked (no later "word timing wins" upgrade from another one)
         "provider": "",
         "typewriter": true,
