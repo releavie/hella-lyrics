@@ -90,13 +90,16 @@ Set through the shell's plugin settings (they live in your
 | `searchInMessengers` | `false` | search a messenger's voice messages online too, without asking per message |
 
 The provider dropdown sits in the player card itself, so the current choice and
-the source that answered are visible as soon as the card opens. `opacity` and
-`wordLeadMs` live behind the gear in its transport row; their drags preview live
-and only the release is saved. `provider` is deliberately not in the shell's
-settings schema: the choice belongs in the card, next to the lyrics it changes.
+the source that answered are visible as soon as the card opens. Its list uses
+shorter rows and keeps clear of the card edges. `opacity` and `wordLeadMs` are
+always visible at the bottom of the card — there is no gear to open — and their
+drags preview live, with only the release saved. `provider` is deliberately not
+in the shell's settings schema: the choice belongs in the card, next to the
+lyrics it changes.
 
-The card's header has a reset icon that puts those three settings back to their
-defaults (Auto, 100%, 0 ms) and saves them, and a close icon. Clicking the line
+The card's header has a circular-arrow reset icon that puts those three settings
+back to their defaults (Auto, 100%, 0 ms) and saves them, and a close icon.
+Clicking the line
 again, an outside click, another panel taking over, or `shell hide angelos.lyrics`
 also closes it; `shell summon angelos.lyrics '{}'` opens it.
 

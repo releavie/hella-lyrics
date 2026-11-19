@@ -141,15 +141,13 @@ BarWidget {
     // ---- the player popup ----------------------------------------------------
     // a small transport card anchored to this widget: cover, title, pause/next/previous
     property bool popupOpen: false
-    // the popup's sliders (opacity, words ahead), collapsed until the gear is hit
-    property bool settingsOpen: false
     // Bar.findPanelWidget (shell.summon/toggle and the bar's own popout
     // coordinator) requires open/close/opened on the bar-widget root. Without
     // them the card has no keyboard route and only closes on an outside click.
     readonly property bool opened: popupOpen
     function open() { popupOpen = true }
     function togglePopup() { popupOpen = !popupOpen }
-    function close() { popupOpen = false; settingsOpen = false }
+    function close() { popupOpen = false }
     // the bar prefers this when another panel takes over, so it does not
     // re-trigger the generic close path mid-switch
     function closeForPopoutSwitch() { close() }
@@ -521,9 +519,10 @@ BarWidget {
         open: root.popupOpen
         contentWidth: popup.fittedContentWidth(Style.space(300))
         // The window takes its size on first map, when the column's children
-        // have not reported their implicit sizes yet. Derive it from the rows
-        // themselves so the card opens full instead of clipping the switcher.
-        contentHeight: popup.fittedContentHeight(root.settingsOpen ? 420 : 320)
+        // have not reported their implicit sizes yet. Both sliders are always
+        // in the card, so reserve their room up front: this also leaves space
+        // for the provider dropdown's own list to open inside the card.
+        contentHeight: popup.fittedContentHeight(420)
 
         Column {
             id: column
@@ -541,7 +540,8 @@ BarWidget {
                 Button {
                     id: resetButton
                     anchors.left: parent.left
-                    iconText: "󰔄"
+                    iconText: ""   // nf-fa-refresh: the bent circular arrow
+                    fontFamily: root.fontFamily
                     tooltipText: "Reset provider, opacity and words ahead"
                     foreground: root.tint
                     horizontalPadding: Style.spacing.controlPaddingX
@@ -665,18 +665,6 @@ BarWidget {
                     opacity: enabled ? 1.0 : 0.4
                     onClicked: if (root.lyr.player) root.lyr.player.next()
                 }
-
-                // the settings row is the popup's own; the gear stays in the
-                // transport row so the card does not change height on the toggle
-                Button {
-                    iconText: "󰒓"
-                    foreground: root.tint
-                    height: playButton.implicitHeight
-                    horizontalPadding: Style.spacing.controlPaddingX
-                    verticalPadding: Style.spacing.controlPaddingY
-                    selected: root.settingsOpen
-                    onClicked: root.settingsOpen = !root.settingsOpen
-                }
             }
 
             // ---- where the line comes from ----
@@ -691,7 +679,12 @@ BarWidget {
                 spacing: Style.space(4)
 
                 Dropdown {
-                    width: parent.width
+                    // A little narrower and shorter than the card: its list
+                    // opens inside this window, so a full-width trigger with
+                    // tall rows ran past the bottom edge.
+                    width: parent.width - Style.space(20)
+                    rowHeight: 24
+                    popupRowHeight: 20
                     foreground: root.tint
                     label: "Lyrics provider"
                     value: root.provider
@@ -743,12 +736,11 @@ BarWidget {
                 }
             }
 
-            // ---- settings: how it moves, how solid it is ----
+            // ---- always-visible sliders: how it moves, how solid it is ----
             Column {
                 width: parent.width
-                height: root.settingsOpen ? 86 : 0
+                height: 86
                 spacing: Style.space(4)
-                visible: root.settingsOpen
 
                 Item {
                     width: parent.width

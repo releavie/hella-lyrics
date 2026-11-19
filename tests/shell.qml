@@ -410,9 +410,6 @@ ShellRoot {
             w.togglePopup()
             w.close()
             ok("the bar's hide closes it too", w.popupOpen === false)
-            w.settingsOpen = true
-            w.close()
-            ok("closing also folds the settings row", w.settingsOpen === false)
             w.open()
             ok("shell summon can open the card", w.opened === true && w.popupOpen === true)
             w.closeForPopoutSwitch()
@@ -424,8 +421,42 @@ ShellRoot {
                 if (w.data[ci] && w.data[ci].anchorItem === w && w.data[ci].contentHeight !== undefined)
                     card = w.data[ci]
             ok("the card is full height before it first opens",
-               card !== null && card.contentHeight >= 300,
+               card !== null && card.contentHeight >= 400,
                "contentHeight=" + (card ? card.contentHeight : "none"))
+            var cardCol = card && card.contentItem && card.contentItem.length ? card.contentItem[0] : null
+            var sliders = []
+            var dropdown = null
+            var resetButton = null
+            var gearCount = 0
+            function collectCardParts(item) {
+                if (!item) return
+                for (var i = 0; i < item.children.length; i++) {
+                    var c = item.children[i]
+                    if (c.minimum !== undefined && c.value !== undefined && c.maximum !== undefined)
+                        sliders.push(c)
+                    if (c.options !== undefined && c.label === "Lyrics provider") dropdown = c
+                    if (c.tooltipText && c.tooltipText.indexOf("Reset provider") === 0) resetButton = c
+                    if (c.iconText === "󰒓") gearCount++
+                    collectCardParts(c)
+                }
+            }
+            collectCardParts(cardCol)
+            ok("both sliders sit in the card with no gear to open",
+               sliders.length === 2 && sliders[0].visible && sliders[1].visible && gearCount === 0,
+               "sliders=" + sliders.length + " gear=" + gearCount)
+            ok("the provider list is compact enough for the card",
+               dropdown !== null && dropdown.rowHeight <= 28 && dropdown.popupRowHeight <= 22,
+               dropdown ? dropdown.rowHeight + "/" + dropdown.popupRowHeight : "none")
+            ok("the reset icon is the circular refresh arrow",
+               resetButton !== null && resetButton.iconText === "",
+               resetButton ? resetButton.iconText : "none")
+            // The list opens below the trigger inside the card window. With the
+            // compact rows it must still end above the card's bottom edge.
+            var listTop = dropdown && cardCol ? dropdown.mapToItem(cardCol, 0, 0).y + dropdown.height : 0
+            var maxList = dropdown ? dropdown.popupRowHeight * 8 + 7 * 4 + 8 : 0
+            ok("the provider list fits inside the card",
+               cardCol !== null && cardCol.height > 0 && listTop + maxList <= cardCol.height,
+               "top=" + listTop + " list=" + maxList + " card=" + (cardCol ? cardCol.height : 0))
             ok("the transport buttons report booleans",
                typeof w.canPrev === "boolean" && typeof w.canPlay === "boolean" && typeof w.canNext === "boolean",
                "prev=" + w.canPrev + " play=" + w.canPlay + " next=" + w.canNext)
@@ -433,9 +464,7 @@ ShellRoot {
             // ---- the popup's settings row: opacity ----
             ok("opacity defaults to fully solid", w.opacityPct === 100, "opacityPct=" + w.opacityPct)
             ok("the preview factor follows the setting", w.previewOpacity === 1, "preview=" + w.previewOpacity)
-            ok("the settings row starts collapsed", w.settingsOpen === false)
-            w.settingsOpen = true
-            ok("the gear opens the settings row", w.settingsOpen === true)
+            ok("the old gear state is gone", w.settingsOpen === undefined)
             // the drag dims the line before anything is saved
             w.previewOpacity = 0.4
             ok("a drag dims the line without touching the setting",
@@ -509,7 +538,6 @@ ShellRoot {
             w.saveSetting("wordLeadMs", 0)
             ok("and back to the sung word", w.wordLeadMs === 0 && w.lyr.wordLead === 0,
                "lead=" + w.lyr.wordLead)
-            w.settingsOpen = false
 
             // ---- the card's reset logo ----
             fakeBar.writes = []
