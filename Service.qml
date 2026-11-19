@@ -56,6 +56,7 @@ Item {
                 "index": Lib.Lyrics.index,
                 "wordTimed": Lib.Lyrics.wordTimed,
                 "wordsEstimated": Lib.Lyrics.wordsEstimated,
+                "wordsOverridden": Lib.Lyrics.wordsOverridden,
                 "wordChars": Lib.Lyrics.wordChars,
                 "lineStart": Lib.Lyrics.lineStart,
                 "lineEnd": Lib.Lyrics.lineEnd,

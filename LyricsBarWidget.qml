@@ -182,6 +182,8 @@ BarWidget {
         const src = String(lyr.source || "")
         if (!lyr.hasLyrics)
             return src ? src + " · no timed lyrics" : "No lyrics found"
+        if (lyr.wordsOverridden)
+            return src + " · custom word times"
         return src + " · " + (lyr.wordsEstimated ? "word times guessed" : lyr.wordTimed ? "word timings" : "line timings")
     }
 
