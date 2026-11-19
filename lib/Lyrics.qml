@@ -19,6 +19,9 @@ Singleton {
     Component.onCompleted: ensureWordTimesDir.running = true
 
     readonly property var players: Mpris.players.values
+    // the beat grid guessed words snap to; exposed so diagnostics and tests see the same
+    // singleton the engine uses, not a separate import of the type
+    readonly property var beatGrid: Lib.LyricsBeat
     // the player whose song this is: playing beats paused, the preferred one beats the rest,
     // a music player beats a browser, and a messenger's voice message or a call never takes
     // the song from a music player (Telegram publishes them over MPRIS too); the one already
@@ -1123,11 +1126,18 @@ Singleton {
             return "";
         return lrclibWordText(hit) || (hit.syncedLyrics ? stripCredits(hit.syncedLyrics) : (hit.lyricsfile ? lyricsFileToLrc(hit.lyricsfile) : ""));
     }
+    // one place for the decision, so the migration is testable without a network round trip:
+    // an old cache entry (wordsTried, no lrclibChecked) or plain line times get one check;
+    // a checked entry, source-supplied words, a pin, a messenger and a hand edit do not
+    function needsLrclibCheck(data) {
+        if (!data || !data.syncedLyrics || data.lrclibChecked || data.source === "local" || data.source === "player")
+            return false;
+        if (netBlocked || pinnedSource || overrideEntry() || Lib.Config.lyrics.byWord === false)
+            return false;
+        return !!data.wordsTried || !hasWordTimes(data.syncedLyrics);
+    }
     function wordsUpgrade(key, data) {
-        // another network round trip: never for a track that may not leave the machine,
-        // never under a pinned provider (its answer is the one the user asked for), never over
-        // a local file or the player's own text, and never over hand-edited word times
-        if (netBlocked || pinnedSource || overrideEntry() || Lib.Config.lyrics.byWord === false || !data || !data.syncedLyrics || data.source === "local" || data.source === "player" || data.lrclibChecked)
+        if (!needsLrclibCheck(data))
             return;
         // An entry cached before lrclib's `lyricsfile` was read upgraded (or came whole) with
         // another store's words while lrclib had the words' own times all along. Ask lrclib

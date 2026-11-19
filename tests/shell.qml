@@ -118,6 +118,20 @@ ShellRoot {
         ok("the cache path is inside the plugin's cache",
            lyr.cacheFile("Artist\u0001Title").indexOf("angelos.lyrics/lyrics/") > 0,
            lyr.cacheFile("Artist\u0001Title"))
+        // ---- one-time migration of a cache written before lrclib's word file was read ----
+        var oldCache = { "source": "netease", "wordsTried": true,
+                         "syncedLyrics": "[00:01.00]only a line" }
+        var checkedCache = Object.assign({}, oldCache, { "lrclibChecked": true })
+        var wordedCache = { "source": "lrclib",
+                            "syncedLyrics": "[00:01.00]<00:01.00>one <00:01.50>two" }
+        ok("an old cache entry gets its one lrclib check", lyr.needsLrclibCheck(oldCache) === true)
+        ok("a checked entry is never checked again", lyr.needsLrclibCheck(checkedCache) === false)
+        ok("source-supplied words are left alone", lyr.needsLrclibCheck(wordedCache) === false)
+        ok("a plain line-timed entry also gets a first check",
+           lyr.needsLrclibCheck({ "source": "lrclib", "syncedLyrics": "[00:01.00]line" }) === true)
+        ok("local and player entries are never sent to lrclib",
+           lyr.needsLrclibCheck(Object.assign({}, oldCache, { "source": "local" })) === false
+           && lyr.needsLrclibCheck(Object.assign({}, oldCache, { "source": "player" })) === false)
         var menu = lyr.playerMenu()
         ok("the player menu is built (Lib.I18n.t resolves)",
            Array.isArray(menu) && menu.length === 3 && menu[0].label.length > 0,
@@ -221,6 +235,24 @@ ShellRoot {
            policyRank.map(function (x) { return x.hit.duration + ":" + lyr.hasWordTimes(x.lrc) }).join(" "))
         // the words' own time by default: the popup's slider is the only lead
         ok("words land on their own time by default", lyr.wordLead === 0, "lead=" + lyr.wordLead)
+        // ---- beat snapping: a guess follows the grid, a source's word never does ----
+        var beatNow = Date.now()
+        lyr.beatGrid.beat = { "P": 500, "anchor": beatNow, "locked": true }
+        lyr.beatGrid.locked = true
+        var savedPosition = lyr.position
+        lyr.position = 10
+        var snappedGuess = lyr.wordAt(10.13, true)
+        var plainSource = lyr.wordAt(10.13, false)
+        ok("a guessed word snaps to the locked half-beat", Math.abs(snappedGuess - 10.25) < 0.06,
+           "at=" + snappedGuess)
+        ok("a source word keeps its own time on the same grid", Math.abs(plainSource - 10.13) < 0.001,
+           "at=" + plainSource)
+        lyr.beatGrid.locked = false
+        var unlockedGuess = lyr.wordAt(10.13, true)
+        ok("with no locked beat a guess keeps its own time", Math.abs(unlockedGuess - 10.13) < 0.001,
+           "at=" + unlockedGuess)
+        lyr.beatGrid.locked = true
+        lyr.position = savedPosition
         // ---- the guessed word times for plain LRC ----
         var guessed = lyr.estimateWords(lyr.parseLrc("[00:01.00]one two\n[00:03.00]three four"), 10)
         ok("a plain line gets guessed word times",
@@ -612,6 +644,13 @@ ShellRoot {
             ok("a pin asks only that one source", JSON.stringify(w.lyr.sourceOrder()) === '["local"]',
                JSON.stringify(w.lyr.sourceOrder()))
             ok("a pin's answer is never written to the disk cache", w.lyr.cacheable() === false)
+            var staleCache = { "source": "netease", "wordsTried": true,
+                               "syncedLyrics": "[00:01.00]line" }
+            ok("a pin blocks the one-time lrclib migration", w.lyr.needsLrclibCheck(staleCache) === false)
+            w.lyr._diskQueue = []
+            w.lyr.store("pin-cache-test", staleCache)
+            ok("a pin's answer is not queued to disk", w.lyr._diskQueue.length === 0,
+               "queued=" + w.lyr._diskQueue.length)
             w.saveSetting("provider", "apple music")
             ok("a friendly provider name maps to its store", w.lyr.pinnedSource === "lrccx",
                "pin=" + w.lyr.pinnedSource)

@@ -57,6 +57,8 @@ Item {
                 "wordTimed": Lib.Lyrics.wordTimed,
                 "wordsEstimated": Lib.Lyrics.wordsEstimated,
                 "wordsOverridden": Lib.Lyrics.wordsOverridden,
+                "beatLocked": Lib.LyricsBeat.locked,
+                "beatPeriod": Math.round(Lib.LyricsBeat.beat.P),
                 "wordChars": Lib.Lyrics.wordChars,
                 "lineStart": Lib.Lyrics.lineStart,
                 "lineEnd": Lib.Lyrics.lineEnd,

@@ -22,7 +22,10 @@ what was changed, and what is not bundled.
   player does rather than guessing between line timestamps.
 - **Beat grid** — guessed word times are aligned to the track's own beats,
   detected from the player's audio stream. A time the source supplied is never
-  moved.
+  moved. The tracker uses `python-numpy` when it is installed and the bundled
+  standard-library fallback otherwise; the player's stream is found by its
+  MPRIS PID as well as its name, so players whose audio node is named after its
+  PID (Sonora) still get a grid.
 - **Loudness glow** — the line breathes with the music's level.
 - **Album cover** — the current track's art, or a note glyph when the player
   publishes none.
@@ -38,14 +41,16 @@ what was changed, and what is not bundled.
   rest are fallbacks).
 - `busctl` (systemd) to read the player's real MPRIS `Position`. Without it the
   plugin falls back to the shell's extrapolated position.
-- Optional: `python3` + `python-numpy` for the beat grid, and `cava`,
-  `pw-record`, `pw-dump`, `pactl` for the loudness glow, plus `curl` for remote
-  cover art. Without them the plugin still shows synced lyrics line by line.
+- Optional: `python3` for the beat grid (`python-numpy` speeds it up, but the
+  plugin ships a standard-library fallback), and `cava`, `pw-record`, `pw-dump`,
+  `pactl` for the loudness glow, plus `curl` for remote cover art. Without them
+  the plugin still shows synced lyrics line by line.
   See [`THIRD-PARTY.md`](THIRD-PARTY.md#runtime-dependencies-not-bundled).
 
 On Arch the optional pieces come from the `extra` repository: `python-numpy`,
 `cava`, `pipewire` and `curl`. Install them with your usual package manager —
-the plugin never runs package management itself.
+the plugin never runs package management itself. The beat grid works without
+`python-numpy`; only its fallback is slower.
 
 ## Install
 

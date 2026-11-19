@@ -14,7 +14,7 @@ cache and state are not in the picture.
 Every line printed starts with PORTTEST; the last line is the summary:
 
     ... | grep PORTTEST | grep -c PASS      # pass count
-    ... | grep PORTTEST SUMMARY             # "138/138"
+    ... | grep PORTTEST SUMMARY             # "148/148"
 
 Notes:
 
@@ -25,4 +25,6 @@ Notes:
 * Do not import the plugin's `lib` from outside its directory in a test
   (`import "../lib" as Lib` resolves to the types, not the singleton
   instances). Exercise the singletons through the engine's own functions,
-  as shell.qml does.
+  as shell.qml does; the beat grid is reached through `lyr.beatGrid`.
+* The numpy-free beat tracker has a self-check that needs no audio device:
+  `python3 scripts/beat-fallback.py --selftest` (expects about 120 BPM).
