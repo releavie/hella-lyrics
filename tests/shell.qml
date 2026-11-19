@@ -185,6 +185,30 @@ ShellRoot {
         // ---- word timing wins over line timing ----
         ok("plain LRC has no word times", lyr.hasWordTimes("[00:01.00]one\n[00:02.00]two") === false)
         ok("enhanced LRC has word times", lyr.hasWordTimes("[00:01.00]<00:01.00>one <00:01.50>two") === true)
+        // lrclib keeps the words' own times in a YAML `lyricsfile`, not in syncedLyrics;
+        // reading it is what puts the bar's words where the player's karaoke puts them
+        var yaml = "version: '1.0'\nlines:\n"
+            + "- text: It's getting late\n  start_ms: 30\n  end_ms: 1550\n  words:\n"
+            + "  - text: 'It''s '\n    start_ms: 30\n"
+            + "  - text: 'getting '\n    start_ms: 250\n"
+            + "  - text: late\n    start_ms: 810\n"
+            + "- text: Plain line\n  start_ms: 3000\n"
+        var yl = lyr.lyricsFileToLrc(yaml)
+        ok("a lyricsfile's words become an enhanced LRC",
+           lyr.hasWordTimes(yl)
+           && yl.indexOf("[00:00.03]<00:00.03>It's <00:00.25>getting <00:00.81>late") === 0, yl)
+        ok("a lyricsfile line without words stays a line",
+           yl.indexOf("[00:03.00]Plain line") > 0, yl)
+        var yl2 = lyr.lyricsFileToLrc("- text: a b c\n  start_ms: 1000\n  words:\n  - text: a\n    start_ms: 1000\n")
+        ok("a words/text count mismatch keeps the line whole",
+           lyr.hasWordTimes(yl2) === false && yl2.indexOf("[00:01.00]a b c") === 0, yl2)
+        var hit = { "lyricsfile": yaml, "syncedLyrics": "[00:00.03]It's getting late\n[00:03.00]Plain line" }
+        ok("an lrclib hit prefers its file's word times",
+           lyr.hasWordTimes(lyr.lrclibText(hit)) === true, String(lyr.lrclibText(hit)).slice(0, 60))
+        ok("an lrclib hit without a file keeps its LRC",
+           lyr.lrclibText({ "syncedLyrics": "[00:01.00]one\n[00:02.00]two" }).indexOf("[00:01.00]one") === 0)
+        // the words' own time by default: the popup's slider is the only lead
+        ok("words land on their own time by default", lyr.wordLead === 0, "lead=" + lyr.wordLead)
         var ttml = '<tt><body><div><p begin="1.5" end="3"><span begin="1.5">Hello</span> '
             + '<span begin="2">world</span></p><p begin="4">Next line</p></div></body></tt>'
         var tl = lyr.ttmlToLrc(ttml)
@@ -217,6 +241,11 @@ ShellRoot {
             var best = candidates.filter(function (r) { return r.syncedLyrics })
                 .sort(function (x, y) { return Math.abs(x.duration - 236) - Math.abs(y.duration - 236) })[0]
             ok("a synced hit survives", !!best, best ? best.trackName + " @ " + best.duration : "none")
+            var worded = body.filter(function (r) {
+                return r.lyricsfile && lyr.hasWordTimes(lyr.lyricsFileToLrc(r.lyricsfile))
+            })
+            ok("lrclib hits carry the words' times in their lyricsfile",
+               worded.length > 0, worded.length + " worded hits")
             if (best) {
                 ok("goodLrc on it", lyr.goodLrc(best.syncedLyrics) === true)
                 var lines = lyr.parseLrc(best.syncedLyrics)
@@ -429,6 +458,34 @@ ShellRoot {
             }
             w.bar = null
             w.saveSetting("opacity", 100)
+
+            // ---- the popup's provider switcher ----
+            ok("the provider starts on auto", w.provider === "", "provider=" + w.provider)
+            ok("the switcher lists the stores",
+               w.providerOptions.length > 5 && w.providerOptions[0].value === ""
+               && w.providerOptions.some(function (o) { return o.value === "lrclib" && o.label.indexOf("LrcLib") >= 0 }),
+               "n=" + w.providerOptions.length)
+            fakeBar.writes = []
+            w.bar = fakeBar
+            // "local" keeps the check off the network: pinning it asks a file source
+            w.saveSetting("provider", "local")
+            ok("pinning a provider applies at once", w.provider === "local", "provider=" + w.provider)
+            ok("the pin is persisted",
+               fakeBar.writes.length === 1 && fakeBar.writes[0].entry.provider === "local",
+               JSON.stringify(fakeBar.writes))
+            w.saveSetting("provider", "")
+            ok("auto is a provider choice too",
+               w.provider === "" && w.sourceStatus.length > 0, w.sourceStatus)
+            w.bar = null
+
+            // ---- words ahead: the popup's own lead, in song milliseconds ----
+            ok("words land on their own time by default", w.wordLeadMs === 0, "lead=" + w.wordLeadMs)
+            w.saveSetting("wordLeadMs", 150)
+            ok("the lead reaches the engine", Math.abs(w.lyr.wordLead - 0.15) < 0.001,
+               "lead=" + w.lyr.wordLead)
+            w.saveSetting("wordLeadMs", 0)
+            ok("and back to the sung word", w.wordLeadMs === 0 && w.lyr.wordLead === 0,
+               "lead=" + w.lyr.wordLead)
             w.settingsOpen = false
 
             // ---- the cover on the left ----

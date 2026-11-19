@@ -36,7 +36,12 @@ Singleton {
         "searchInMessengers": false,
         "artwork": "cover",         // note | cover: what sits left of the line
         "offsetMs": 0,
-        "wordLeadMs": 150,
+        // 0 = a word comes up on its own time, as the player's own karaoke shows it; a
+        // positive value brings it up early for singing along
+        "wordLeadMs": 0,
+        // one provider pinned from the player card: "" = the chain above, otherwise only
+        // that source is asked (no later "word timing wins" upgrade from another one)
+        "provider": "",
         "typewriter": true,
         "screens": [],              // [] = every screen
         // the order the engine searches in; [] = the engine's own list (lrclib first,

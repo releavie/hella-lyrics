@@ -193,20 +193,25 @@ Singleton {
     // The times are the song's own (`w`: enhanced LRC, AMLL, NetEase's YRC — wordsUpgrade) or,
     // without them, the line's time shared by its syllables (`ws`: estimateWords)
     readonly property bool wordTimed: Lib.Config.lyrics.byWord !== false && index >= 0 && index < lines.length && !!lines[index].s
+    // the words' own times are guessed from the line's time (`ws`), not supplied by the
+    // source (`w`): the card says which one is on screen, and only a guess is beat-snapped
+    readonly property bool wordsEstimated: wordTimed && !lines[index].w
     property int wordChars: 0
     property real _wordPos: 0
-    // a word comes up a moment before it is sung (Settings → Lyrics → «Words ahead»): read in
-    // time to sing along
-    readonly property real wordLead: Math.max(0, Lib.Config.lyrics.wordLeadMs) / 1000
-    // when a word comes up (song time): wordLead before its time, on the nearest beat or
-    // half-beat while LyricsBeat hears one
-    function wordAt(t) {
-        return Lib.LyricsBeat.snap(t - wordLead, position);
+    // a word comes up on its own time; a positive lead brings it up early for singing along
+    // (the player card's «Words ahead»), a negative one holds it back
+    readonly property real wordLead: (Number(Lib.Config.lyrics.wordLeadMs) || 0) / 1000
+    // when a word comes up (song time): wordLead from its time. Only a guessed `ws` time is
+    // moved to the beat (LyricsBeat); a time the source supplied is never altered.
+    function wordAt(t, estimated) {
+        const at = t - wordLead;
+        return estimated ? Lib.LyricsBeat.snap(at, position) : at;
     }
     function sungChars(l) {
         const ws = l.ws || l.w;
+        const estimated = !l.w;
         let n = 0;
-        while (n < ws.length && wordAt(ws[n]) <= position)
+        while (n < ws.length && wordAt(ws[n], estimated) <= position)
             n++;
         const sung = l.s.slice(0, n + 1).join("").replace(/\s+/g, " ").trim().length;
         // times by syllable (NetEase, AMLL): a word shows whole from its first one
@@ -290,7 +295,7 @@ Singleton {
             let next = root.index + 1 < root.lines.length ? root.lines[root.index + 1].t : -1;
             if (root.wordTimed) {
                 const l = root.lines[root.index];
-                const word = (l.ws || l.w).map(t => root.wordAt(t)).find(t => t > root.position);
+                const word = (l.ws || l.w).map(t => root.wordAt(t, !l.w)).find(t => t > root.position);
                 if (word !== undefined && (next < 0 || word < next))
                     next = word;
             }
@@ -590,6 +595,13 @@ Singleton {
         }
         const key = trackKey;
         _pendingKey = key;
+        // a pinned provider always asks the network: the disk holds whichever source won the
+        // last search, which is not the one the user pinned
+        if (pinnedSource) {
+            status = "loading";
+            fetchNet(key);
+            return;
+        }
         if (_mem[key] !== undefined) {
             apply(_mem[key]);
             return;
@@ -642,8 +654,10 @@ Singleton {
     function store(key, data) {
         _mem[key] = data;
         // no cache file for a messenger's track: its name is the sender's name and the message's
-        // time, and the text is not a song's. The session keeps it, the disk does not.
-        if (netBlocked)
+        // time, and the text is not a song's. The session keeps it, the disk does not. A pinned
+        // provider's answer is likewise for this listen only: unpinning must not inherit it as
+        // the "auto" result.
+        if (netBlocked || pinnedSource)
             return;
         _diskQueue.push({
             "path": cacheFile(key),
@@ -691,6 +705,16 @@ Singleton {
     readonly property var sources: {
         const list = Lib.Config.parseSources(Lib.Config.lyrics.sources);
         return list.length ? list : allSources;
+    }
+    // one provider pinned in the player card: only it is asked, with no "word timing wins"
+    // upgrade from another store, and the track is fetched again the moment the pin changes
+    readonly property string pinnedSource: Lib.Config.parseSources(Lib.Config.lyrics.provider)[0] || ""
+    onPinnedSourceChanged: if (title) {
+        // the pinned answer is not the auto one (nor the other way round): drop it and
+        // look again. Not refetch(): choosing a provider is a preference, not consent to
+        // send a messenger's voice message to a lyrics service.
+        delete _mem[trackKey];
+        fetch();
     }
 
     // ---- what may leave the machine ----
@@ -853,16 +877,107 @@ Singleton {
     function hasWordTimes(lrc) {
         return /<\d+:\d+(?:[.:]\d+)?>/.test(String(lrc || ""));
     }
+
+    // ---- lrclib's own word timings ----
+    // The search and get endpoints answer with a `lyricsfile`: a small YAML of the same lines
+    // with every word's start. `syncedLyrics` rarely carries <w> tags, so this file is where
+    // lrclib's word timing actually lives — and it is the timing the player's own karaoke draws,
+    // so reading it is what puts a word where the player puts it (measured within ~50 ms).
+    function yamlValue(v) {
+        v = String(v === undefined || v === null ? "" : v).trim();
+        if (v.length >= 2 && v[0] === "'" && v[v.length - 1] === "'")
+            return v.slice(1, -1).replace(/''/g, "'");
+        if (v.length >= 2 && v[0] === '"' && v[v.length - 1] === '"')
+            return v.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+        return v;
+    }
+    // 143.29 → "02:23.29", the stamp inside a line's <…> marks
+    function lrcMark(t) {
+        const cs = Math.max(0, Math.round((Number(t) || 0) * 100));
+        const m = Math.floor(cs / 6000), rest = cs - m * 6000;
+        const s = Math.floor(rest / 100), hundredths = rest - s * 100;
+        return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s + "." + (hundredths < 10 ? "0" : "") + hundredths;
+    }
+    // lrclib's lyricsfile → the engine's enhanced LRC (a line stamp, then one <w> per word).
+    // The file's word strings are only used for their count and order: the line's own text is
+    // rebuilt from its tokens so the bar shows exactly what lrclib wrote, and a file whose
+    // words and text disagree keeps its line timing only (no half-guessed karaoke).
+    function lyricsFileToLrc(text) {
+        const raw = String(text || "");
+        if (!/^- text:/m.test(raw) || !/^\s+start_ms:/m.test(raw))
+            return "";
+        const out = [];
+        let line = null, word = null;
+        const flushWord = () => {
+            if (line && word && isFinite(word.at))
+                line.words.push(word);
+            word = null;
+        };
+        const flushLine = () => {
+            flushWord();
+            if (line && isFinite(line.start)) {
+                const tokens = line.text.split(/\s+/).filter(x => x !== "");
+                let stamped = "[" + lrcMark(line.start) + "]";
+                if (tokens.length && tokens.length === line.words.length) {
+                    for (let i = 0; i < tokens.length; i++)
+                        stamped += "<" + lrcMark(line.words[i].at) + ">" + tokens[i] + (i + 1 < tokens.length ? " " : "");
+                } else {
+                    stamped += line.text;
+                }
+                out.push(stamped);
+            }
+            line = null;
+        };
+        for (const row of raw.split(/\r?\n/)) {
+            let m;
+            if ((m = row.match(/^- text:(.*)$/))) {
+                flushLine();
+                line = {"text": yamlValue(m[1]), "start": NaN, "words": []};
+            } else if (!line) {
+                continue;
+            } else if ((m = row.match(/^  start_ms:\s*(\d+)\s*$/))) {
+                line.start = Number(m[1]) / 1000;
+            } else if ((m = row.match(/^  - text:(.*)$/))) {
+                flushWord();
+                word = {"at": NaN};
+            } else if (word && (m = row.match(/^    start_ms:\s*(\d+)\s*$/))) {
+                word.at = Number(m[1]) / 1000;
+            }
+        }
+        flushLine();
+        return out.join("\n");
+    }
+    // the word-timed text of one lrclib hit, or "" when the file carries no words
+    function lrclibWordText(hit) {
+        const file = hit && hit.lyricsfile ? lyricsFileToLrc(hit.lyricsfile) : "";
+        return hasWordTimes(file) ? file : "";
+    }
+    // what an lrclib hit shows: its words when it has them, else its line-timed LRC
+    function lrclibText(hit) {
+        if (!hit)
+            return "";
+        return lrclibWordText(hit) || (hit.syncedLyrics ? stripCredits(hit.syncedLyrics) : (hit.lyricsfile ? lyricsFileToLrc(hit.lyricsfile) : ""));
+    }
     function wordsUpgrade(key, data) {
         // another network round trip: never for a track that may not leave the machine,
-        // and never over a local file or the player's own text
-        if (netBlocked || Lib.Config.lyrics.byWord === false || !data || !data.syncedLyrics || data.wordsTried || data.source === "local" || data.source === "player" || hasWordTimes(data.syncedLyrics))
+        // never under a pinned provider (its answer is the one the user asked for), and never
+        // over a local file or the player's own text
+        if (netBlocked || pinnedSource || Lib.Config.lyrics.byWord === false || !data || !data.syncedLyrics || data.source === "local" || data.source === "player" || data.lrclibChecked)
+            return;
+        // An entry cached before lrclib's `lyricsfile` was read upgraded (or came whole) with
+        // another store's words while lrclib had the words' own times all along. Ask lrclib
+        // once more, then mark it so no later play asks again, whatever the answer. A fresh
+        // result that already carries words is left alone: the chain that produced it had
+        // lrclib first.
+        const stale = !!data.wordsTried;
+        if (!stale && hasWordTimes(data.syncedLyrics))
             return;
         const c = cleaned, d = length;
         const tried = () => {
             if (_mem[key] === data)
                 store(key, Object.assign({}, data, {
-                    "wordsTried": true
+                    "wordsTried": true,
+                    "lrclibChecked": true
                 }));
         };
         const fetchers = {
@@ -872,7 +987,7 @@ Singleton {
             "lrccx": cb => appleWord(c, d, cb),
             "betterlyrics": cb => betterlyricsWord(c, d, cb)
         };
-        const steps = sources.filter(s => !!fetchers[s]).map(s => fetchers[s]);
+        const steps = (stale ? ["lrclib"].filter(s => !!fetchers[s]) : sources.filter(s => !!fetchers[s])).map(s => fetchers[s]);
         const run = () => {
             const step = steps.shift();
             if (!step)
@@ -884,7 +999,8 @@ Singleton {
                     const up = Object.assign({
                         "source": source || "NetEase",
                         "syncedLyrics": lrc,
-                        "wordsTried": true
+                        "wordsTried": true,
+                        "lrclibChecked": true
                     }, extra || {});
                     if (root.tempoVersion && up.duration > 0 && d > 0 && Math.abs(up.duration - d) > 3)
                         up.scale = d / up.duration;
@@ -1134,15 +1250,20 @@ Singleton {
             "track_name": c.title,
             "artist_name": c.artist
         }), (code, list) => {
-            const ok = (Array.isArray(list) ? list : []).filter(r => root.hasWordTimes(r.syncedLyrics) && root.matches({
-                    "title": r.trackName || r.name,
-                    "artist": r.artistName,
-                    "duration": r.duration
-                }, c, d)).sort((x, y) => Math.abs((x.duration || 0) - d) - Math.abs((y.duration || 0) - d));
-            const hit = ok[0];
-            cb(hit ? hit.syncedLyrics : null, "lrclib", hit ? {
-                "trackName": hit.trackName || hit.name,
-                "duration": hit.duration || 0
+            // the words live in the hit's `lyricsfile` (see lyricsFileToLrc); a hit whose
+            // syncedLyrics happens to carry <w> tags is taken too
+            const ok = (Array.isArray(list) ? list : []).map(r => ({
+                "hit": r,
+                "lrc": root.lrclibWordText(r) || (root.hasWordTimes(r.syncedLyrics) ? root.stripCredits(r.syncedLyrics) : "")
+            })).filter(x => x.lrc && root.matches({
+                    "title": x.hit.trackName || x.hit.name,
+                    "artist": x.hit.artistName,
+                    "duration": x.hit.duration
+                }, c, d)).sort((x, y) => Math.abs((x.hit.duration || 0) - d) - Math.abs((y.hit.duration || 0) - d));
+            const best = ok[0];
+            cb(best ? best.lrc : null, "lrclib", best ? {
+                "trackName": best.hit.trackName || best.hit.name,
+                "duration": best.hit.duration || 0
             } : null);
         });
     }
@@ -1244,8 +1365,10 @@ Singleton {
     function fetchNet(key) {
         const d = length;
         // a messenger's metadata stays on the machine unless the user asked (netBlocked): only the
-        // sources that read the disk and the player's own metadata are left
-        const order = netBlocked ? sources.filter(s => s === "local" || s === "player") : sources;
+        // sources that read the disk and the player's own metadata are left. A provider pinned
+        // in the player card is the only one asked, and nothing upgrades over it.
+        const order = netBlocked ? sources.filter(s => s === "local" || s === "player")
+            : pinnedSource ? [pinnedSource] : sources;
         const steps = [];
         let plain = null;  // best unsynced text of the right song met on the way
         let stepId = 0;
@@ -1303,11 +1426,24 @@ Singleton {
                         "artist": r.artistName,
                         "duration": r.duration
                     }, c, d));
-                const synced = ok.filter(r => r.syncedLyrics).sort((x, y) => Math.abs((x.duration || 0) - d) - Math.abs((y.duration || 0) - d));
                 keepPlain(ok.find(r => r.plainLyrics) ? Object.assign({
                     "source": "lrclib"
                 }, ok.find(r => r.plainLyrics)) : null);
-                return synced[0] || null;
+                // a hit with the words' own times (its lyricsfile) beats a line-timed one of
+                // the same song; among equals the closest length wins
+                const scored = ok.map(r => ({
+                    "hit": r,
+                    "lrc": root.lrclibText(r)
+                })).filter(x => x.lrc);
+                scored.sort((x, y) => (root.hasWordTimes(y.lrc) ? 1 : 0) - (root.hasWordTimes(x.lrc) ? 1 : 0)
+                    || Math.abs((x.hit.duration || 0) - d) - Math.abs((y.hit.duration || 0) - d));
+                const best = scored[0];
+                return best ? {
+                    "source": "lrclib",
+                    "syncedLyrics": best.lrc,
+                    "trackName": best.hit.trackName || best.hit.name || "",
+                    "duration": best.hit.duration || 0
+                } : null;
             };
             const steps = {};
             // .lrc next to the track, or ~/.lyrics/Artist - Title.lrc
@@ -1354,30 +1490,41 @@ Singleton {
                         "artist": body.artistName,
                         "duration": body.duration
                     }, c, d);
-                    if (ok && (body.syncedLyrics || body.instrumental))
-                        return done(Object.assign({
-                            "source": "lrclib"
-                        }, body));
-                    if (ok)
-                        keepPlain(Object.assign({
-                            "source": "lrclib"
-                        }, body));
+                    if (ok && body.instrumental)
+                        return done({
+                            "source": "lrclib",
+                            "instrumental": true,
+                            "trackName": body.trackName || "",
+                            "duration": body.duration || 0
+                        });
+                    // the word timings are in the hit's `lyricsfile`, not in `syncedLyrics`
+                    const lrc = ok ? root.lrclibText(body) : "";
+                    if (lrc)
+                        return done({
+                            "source": "lrclib",
+                            "syncedLyrics": lrc,
+                            "trackName": body.trackName || "",
+                            "duration": body.duration || 0
+                        });
+                    if (ok && body.plainLyrics)
+                        keepPlain({
+                            "source": "lrclib",
+                            "plainLyrics": body.plainLyrics,
+                            "trackName": body.trackName || "",
+                            "duration": body.duration || 0
+                        });
                     next();
                 }), (next, done) => http(base + "search?" + query({
                         "track_name": c.title,
                         "artist_name": c.artist
                     }), (code, list) => {
                     const best = pickLrclib(list);
-                    best ? done(Object.assign({
-                        "source": "lrclib"
-                    }, best)) : next();
+                    best ? done(best) : next();
                 }), (next, done) => http(base + "search?" + query({
                         "q": (c.artist + " " + c.title).trim()
                     }), (code, list) => {
                     const best = pickLrclib(list);
-                    best ? done(Object.assign({
-                        "source": "lrclib"
-                    }, best)) : next();
+                    best ? done(best) : next();
                 })];
             // AMLL TTML DB: hand-timed lyrics, found by the Spotify / NetEase track id or the name
             steps.amll = (next, done) => root.amllFind(c, d, (lrc, hit) => {
