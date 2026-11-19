@@ -27,7 +27,10 @@ import subprocess
 import sys
 import time
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 RATE = 22050
 HOP = 512
@@ -194,6 +197,13 @@ def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "system"
     names = [n.lower() for n in sys.argv[2:] if n.strip()]
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    if np is None:
+        # The beat grid is optional. Say why once, stay idle (so LyricsBeat keeps
+        # its clean state) and let the line keep the times its source supplied.
+        print("python-numpy is needed for the beat grid", file=sys.stderr, flush=True)
+        say({"idle": True, "why": "numpy"})
+        while True:
+            time.sleep(1)
     tracker = Tracker()
     proc = None
     last_report = 0.0
