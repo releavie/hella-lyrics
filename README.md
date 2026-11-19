@@ -13,27 +13,27 @@ what was changed, and what is not bundled.
 
 ![Hella Lyrics in the Omarchy bar](docs/front-page.png)
 
-## What it does
+## Highlights
 
-- **Synced lines in the bar** — the current line, as wide as it needs (up to a
-  configurable maximum) and rising into place on every line change. A line that
-  still does not fit glides sideways instead of being cut off.
-- **Word-by-word karaoke** — with sources that carry word timings the settled
-  part of the line stays put and each new word hops in. lrclib's own per-word
-  timings (its `lyricsfile`) are read too, so the bar draws the same karaoke the
-  player does rather than guessing between line timestamps.
-- **Beat grid** — guessed word times are aligned to the track's own beats,
-  detected from the player's audio stream. A time the source supplied is never
-  moved. The tracker uses `python-numpy` when it is installed and the bundled
-  standard-library fallback otherwise; the player's stream is found by its
-  MPRIS PID as well as its name, so players whose audio node is named after its
-  PID (Sonora) still get a grid.
-- **Loudness glow** — the line breathes with the music's level.
-- **Album cover** — the current track's art, or a note glyph when the player
-  publishes none.
-- **Player card** — click the line: cover, title, artist, previous / play-pause /
-  next, a provider switch with the source that actually answered, an opacity
-  slider, and a “Words ahead” slider for singing along.
+- **Lyrics that land on the beat** — the current line arrives character by
+  character, then hands off word by word when the source has timings. lrclib's
+  own per-word timings are used as-is; only guessed words are snapped to the
+  track's detected beat grid, and long lines glide instead of being cut off.
+- **Five lyric sources, one switch** — lrclib, AMLL, NetEase YRC, Apple TTML
+  (through `lrccx`) and BetterLyrics. The player card shows the source that
+  actually answered, and you can pin one provider without writing it to disk.
+- **Fix any track by hand** — a `word-times.json` in
+  `~/.config/omarchy/hella.lyrics/` can pin exact word times for a song. Overrides
+  win over the network and reload when the track changes.
+- **Real playback position** — MPRIS `Position` is read through `busctl`, so the
+  highlight tracks the player instead of drifting. Audio streams are matched by
+  MPRIS PID too, which keeps the beat grid working with players such as Sonora.
+- **Alive, not static** — album cover, a loudness glow that breathes with the
+  music, and a full-size player card with transport, provider switch, opacity
+  and “Words ahead” sliders.
+- **Works out of the box** — no packages installed by the plugin, no hand-edited
+  `shell.json`, and no logout or reboot. The beat grid degrades cleanly without
+  `python-numpy` thanks to a bundled pure-Python fallback.
 
 ## Requirements
 
