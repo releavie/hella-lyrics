@@ -304,7 +304,7 @@ Singleton {
     // seeks without announcing it (Sonora does all three) leaves the lyrics running on
     // their own. So the real Position is read from the player over D-Bus while a line is
     // on screen, and that sample - not the extrapolation - is what the lines follow.
-    // One `sh` reads it twice a second; the shell keeps it for the whole song.
+    // One `sh` reads it five times a second; the shell keeps it for the whole song.
     property double _realPos: 0      // song seconds at the last sample
     property double _realAt: 0       // Date.now() of the first sample of that value
     property double _lastSampleAt: 0 // Date.now() of the last successful sample
@@ -316,6 +316,12 @@ Singleton {
     // a player that does not expose Position keeps the old extrapolated behaviour
     readonly property bool positionLive: livePosition
     readonly property string playerBus: player ? String(player.dbusName || "") : ""
+    // The shell's reported value is true at the player's own update, not at this read.
+    // Players publish about once a second; polling five times means the change happened
+    // in the last 0.2 s, and anchoring its value at the middle of that window keeps the
+    // interpolation centred instead of always half a poll behind (the old 0.55 s poll
+    // made every word come up ~0.3 s late).
+    readonly property string positionScript: 'b="$1"; while :; do busctl --user get-property "$b" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Position 2>/dev/null || echo; sleep 0.2; done'
     // "x 175487666" (microseconds) from `busctl get-property … Position`
     function samplePosition(text) {
         const m = String(text || "").match(/^\s*x\s+(\d+)\s*$/);
@@ -342,9 +348,11 @@ Singleton {
                 _stallPos = pos;
                 _stallAt = now;
             } else if (pos > _realPos + 0.02) {
-                // the player moved on: this value was true since this sample
+                // The player moved on. The new value was true at some point since the
+                // previous sample; the middle of that window is the best estimate.
+                const prev = _lastSampleAt;
                 _realPos = pos;
-                _realAt = now;
+                _realAt = prev > 0 && now - prev < 1200 ? (now + prev) / 2 : now;
                 if (pos > _stallPos + 0.2) {
                     _stallPos = pos;
                     _stallAt = now;
@@ -372,7 +380,7 @@ Singleton {
         if (_lastSampleAt > 0 && Date.now() - _lastSampleAt > 2600)
             return _holdPos;
         let age = (Date.now() - _realAt) / 1000;
-        // samples should arrive twice a second; if they stop, do not run away
+        // samples should arrive five times a second; if they stop, do not run away
         if (!(age >= 0))
             age = 0;
         if (age > 2.5)
@@ -398,7 +406,7 @@ Singleton {
         id: posPoll
         property string bus: ""
         running: false
-        command: ["sh", "-c", 'b="$1"; while :; do busctl --user get-property "$b" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Position 2>/dev/null || echo; sleep 0.55; done', "sh", bus]
+        command: ["sh", "-c", root.positionScript, "sh", bus]
         stdout: SplitParser {
             onRead: line => root.samplePosition(line)
         }
@@ -423,7 +431,7 @@ Singleton {
             return;
         posPoll.running = false;
         posPoll.bus = playerBus;
-        posPoll.command = ["sh", "-c", 'b="$1"; while :; do busctl --user get-property "$b" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Position 2>/dev/null || echo; sleep 0.55; done', "sh", playerBus];
+        posPoll.command = ["sh", "-c", root.positionScript, "sh", playerBus];
         posPoll.running = true;
     }
 

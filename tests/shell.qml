@@ -162,12 +162,20 @@ ShellRoot {
         lyr.samplePosition("x 12345678")
         ok("no progress while Playing is a stall", lyr.stalled === true)
         ok("a stalled line holds its position",
-           Math.abs(lyr.positionNow() - 12.3456) < 0.001, "now=" + lyr.positionNow())
-        // audio resumes: the next sample clears the stall and moves the line
+           Math.abs(lyr.positionNow() - 12.3456) < 0.01, "now=" + lyr.positionNow())
+        // a fresh sample clears the stall
         lyr.samplePosition("x 13345678")
         ok("a fresh sample clears the stall",
            lyr.stalled === false && Math.abs(lyr._realPos - 13.3456) < 0.001,
            "stalled=" + lyr.stalled + " pos=" + lyr._realPos)
+        // the player reports about once a second; a change it made somewhere in
+        // the last poll window is anchored mid-window, not at our read of it
+        lyr._lastSampleAt = Date.now() - 400
+        lyr.samplePosition("x 14345678")
+        ok("a moved sample interpolates from the middle of the poll window",
+           Math.abs(lyr._realPos - 14.3456) < 0.001
+           && lyr.positionNow() > 14.50 && lyr.positionNow() < 14.60,
+           "now=" + lyr.positionNow())
         // a seek back the clock cannot explain is followed at once
         lyr.samplePosition("x 5000000")
         ok("a backward jump snaps the line",
