@@ -3,8 +3,8 @@
 Live synchronized lyrics in the Omarchy bar: the current line arrives
 character by character while it is sung, and switches to a word-by-word karaoke
 hand-off when the source carries word timings. The album cover sits to its left;
-a click on the line opens a small player card with transport and an opacity
-setting.
+a click on the line opens a small player card with transport, a lyrics-provider
+switch and sliders for opacity and how early words come up.
 
 A port of the angelOS lyrics bar and engine by
 [MixaDoDs](https://github.com/MixaDoDs/AngelOS-Dotfiles) (MIT) to the Omarchy
@@ -17,14 +17,18 @@ what was changed, and what is not bundled.
   configurable maximum) and rising into place on every line change. A line that
   still does not fit glides sideways instead of being cut off.
 - **Word-by-word karaoke** — with sources that carry word timings the settled
-  part of the line stays put and each new word hops in.
-- **Beat grid** — word timings are aligned to the track's own beats, detected
-  from the player's audio stream.
+  part of the line stays put and each new word hops in. lrclib's own per-word
+  timings (its `lyricsfile`) are read too, so the bar draws the same karaoke the
+  player does rather than guessing between line timestamps.
+- **Beat grid** — guessed word times are aligned to the track's own beats,
+  detected from the player's audio stream. A time the source supplied is never
+  moved.
 - **Loudness glow** — the line breathes with the music's level.
 - **Album cover** — the current track's art, or a note glyph when the player
   publishes none.
 - **Player card** — click the line: cover, title, artist, previous / play-pause /
-  next, and an opacity slider with live preview while you drag.
+  next, a provider switch with the source that actually answered, an opacity
+  slider, and a “Words ahead” slider for singing along.
 
 ## Requirements
 
@@ -79,12 +83,16 @@ Set through the shell's plugin settings (they live in your
 | `opacity` | `100` | how solid the line sits in the bar, 20–100 |
 | `maxWidth` | `500` | widest a line may get before it glides |
 | `offsetMs` | `0` | shift the lyrics earlier (negative) or later (positive) than the player |
+| `wordLeadMs` | `0` | how early a word comes up, in milliseconds: `0` lands on the sung word; positive is early, negative late |
+| `provider` | — | pin one provider from the player card (`lrclib`, `netease`, `amll`, `lrccx`, `betterlyrics`, …); empty keeps the search order |
 | `sources` | — | comma-separated search order, e.g. `lrclib, amll, netease, apple` |
 | `preferPlayer` | — | substring of the player to prefer when several are running |
 | `searchInMessengers` | `false` | search a messenger's voice messages online too, without asking per message |
 
-`opacity` also has a slider in the player card (the gear in its transport row);
-the drag previews live and only the release is saved.
+`opacity` and `wordLeadMs` also have sliders in the player card (the gear in its
+transport row), and `provider` has a dropdown there. Drags preview live and only
+the release is saved. `provider` is deliberately not in the shell's settings
+schema: the choice belongs in the card, next to the lyrics it changes.
 
 ### Sources
 
@@ -94,12 +102,24 @@ Empty `sources` keeps it; otherwise only the listed sources are used, in that
 order. `apple` is an alias for `lrccx` (its Apple catalogue), and names are
 case-insensitive.
 
+lrclib's `syncedLyrics` rarely carries per-word tags. Its search and get
+endpoints also return a `lyricsfile` — a small YAML of the same lines with each
+word's own start — and that is what the plugin reads. A worded hit is preferred
+over a line-timed one of the same song, and older caches are re-checked against
+lrclib once so a track cached before this support does not keep another store's
+guess.
+
 A line-timed result is shown as soon as it arrives. The word-capable sources
 then get one chance each, in the same order, and the line is replaced if one
 has the words' own times: word timing wins over the source order without
 delaying the first line.
 
-Sync follows the player's real MPRIS `Position` (read with `busctl` twice a
+Pinning a provider from the player card is strict: only that source is asked,
+no other store upgrades over it, and the track is fetched again the moment the
+pin changes. The card shows which source answered and whether the words are the
+source's own or guessed from the line's timing.
+
+Sync follows the player's real MPRIS `Position` (read with `busctl` five times a
 second), not the shell's wall-clock extrapolation. A player that buffers or
 stalls holds the line where it is until the position moves again; an
 unannounced seek snaps it at once. If the player does not expose `Position`,
