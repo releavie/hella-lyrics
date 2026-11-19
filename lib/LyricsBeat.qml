@@ -35,7 +35,13 @@ Singleton {
         running: root.wanted
         // only the player's own stream (its MPRIS name is its stream's: Helium, Spotify…), never
         // the whole computer: a call, a game or a notification would set the beat
-        command: ["python3", Lib.Paths.script("osu-beats.py"), "app"].concat([Lib.Lyrics.player ? Lib.Lyrics.player.identity : "", Lib.Lyrics.player ? Lib.Lyrics.player.desktopEntry : ""].filter(n => !!n))
+        // the bus name is passed too: Sonora's PipeWire stream is named after its PID,
+        // not after the player, so the tracker resolves the MPRIS owner to find it
+        command: ["python3", Lib.Paths.script("osu-beats.py"), "app"].concat([
+            Lib.Lyrics.player ? Lib.Lyrics.player.identity : "",
+            Lib.Lyrics.player ? Lib.Lyrics.player.desktopEntry : "",
+            Lib.Lyrics.playerBus ? "bus:" + Lib.Lyrics.playerBus : ""
+        ].filter(n => !!n))
         onRunningChanged: if (!running) {
             root.beat = Core.newBeat();
             root.locked = false;

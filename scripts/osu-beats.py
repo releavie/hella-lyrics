@@ -22,6 +22,7 @@ stream that never moves to another node.
 import importlib.util
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -42,10 +43,28 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location("audio_tap", os.path.join(HERE, "audio-tap.py"))
 tap = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tap)
+if np is None:
+    # numpy is optional: the same tracker has a standard-library implementation
+    fspec = importlib.util.spec_from_file_location("beat_fallback", os.path.join(HERE, "beat-fallback.py"))
+    fallback = importlib.util.module_from_spec(fspec)
+    fspec.loader.exec_module(fallback)
+    print("python-numpy not found; using the pure-Python beat tracker", file=sys.stderr, flush=True)
 
 
 def say(obj):
     print(json.dumps(obj), flush=True)
+
+
+def mono(chunk, channels):
+    if np is not None:
+        return np.frombuffer(chunk, "<i2").reshape(-1, channels).astype(np.float32).sum(1) / (32768.0 * channels)
+    return fallback.mono_from_chunk(chunk, channels)
+
+
+def level(a):
+    if np is not None:
+        return float(np.sqrt(np.mean(a * a))) if len(a) else 0.0
+    return fallback.rms(a)
 
 
 def spotify_node():
@@ -53,9 +72,11 @@ def spotify_node():
     return app_node(["spotify"])
 
 
-def app_node(names):
-    """the playback stream of an application with one of `names` (lower case) in its
-    application name, binary or node name: (node name, channel positions) or None"""
+def app_node(names, pids=()):
+    """the playback stream of an application named in `names`, or owned by one of `pids`:
+    (node name, channel positions) or None. A player's MPRIS name rarely appears in its
+    PipeWire node (Sonora publishes as `cpal-pulseaudio-<pid>`), so its D-Bus PID is the
+    reliable link between the song and the stream to tap."""
     for o in tap.pw_dump():
         if o.get("type") != "PipeWire:Interface:Node":
             continue
@@ -63,15 +84,30 @@ def app_node(names):
         p = info.get("props") or {}
         if p.get("media.class") != "Stream/Output/Audio":
             continue
+        try:
+            pid = int(p.get("application.process.id") or 0)
+        except (TypeError, ValueError):
+            pid = 0
         who = " ".join(str(p.get(k, "")) for k in ("application.name", "application.process.binary", "node.name")).lower()
-        if any(n in who for n in names):
+        if (pids and pid in pids) or any(n in who for n in names):
             return p.get("node.name"), tap.positions(p, info) or ["FL", "FR"]
     return None
 
 
-def target(mode, names=()):
+def mpris_pid(bus_name):
+    """resolve an MPRIS bus name to the process that owns it, via busctl"""
+    try:
+        out = subprocess.run(["busctl", "--user", "--no-pager", "status", bus_name],
+                             capture_output=True, text=True, timeout=3).stdout
+        m = re.search(r"^PID=(\d+)$", out, re.M)
+        return int(m.group(1)) if m else 0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return 0
+
+
+def target(mode, names=(), pids=()):
     if mode in ("spotify", "app"):
-        s = spotify_node() if mode == "spotify" else app_node(names)
+        s = spotify_node() if mode == "spotify" else app_node(names, pids)
         return (s[0], False, s[1]) if s else None
     r = tap.resolve("auto")
     return (r[0], r[1], r[2]) if r else None
@@ -195,21 +231,23 @@ class Tracker:
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "system"
-    names = [n.lower() for n in sys.argv[2:] if n.strip()]
+    names, pids = [], []
+    for arg in sys.argv[2:]:
+        if not arg.strip():
+            continue
+        if arg.startswith("bus:"):
+            pid = mpris_pid(arg[4:])
+            if pid:
+                pids.append(pid)
+        else:
+            names.append(arg.lower())
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    if np is None:
-        # The beat grid is optional. Say why once, stay idle (so LyricsBeat keeps
-        # its clean state) and let the line keep the times its source supplied.
-        print("python-numpy is needed for the beat grid", file=sys.stderr, flush=True)
-        say({"idle": True, "why": "numpy"})
-        while True:
-            time.sleep(1)
-    tracker = Tracker()
+    tracker = fallback.Tracker() if np is None else Tracker()
     proc = None
     last_report = 0.0
     while True:
         if proc is None or proc.poll() is not None:
-            t = target(mode, names)
+            t = target(mode, names, pids)
             if not t:
                 say({"idle": True, "why": {"spotify": "no-spotify", "app": "no-player"}.get(mode, "no-output")})
                 time.sleep(2)
@@ -222,9 +260,9 @@ def main():
             proc = None
             continue
         now = time.time()
-        a = np.frombuffer(chunk, "<i2").reshape(-1, channels).astype(np.float32).sum(1) / (32768.0 * channels)
+        a = mono(chunk, channels)
         tracker.feed(a, now)
-        rms = float(np.sqrt(np.mean(a * a))) if len(a) else 0.0
+        rms = level(a)
         if rms < 0.003:
             tracker.quiet_since = tracker.quiet_since or now
         else:

@@ -41,7 +41,7 @@ its licenses do not apply here.
 | `quickshell` | everything | the shell this plugin runs in |
 | `curl` | album covers, QQ Music sources | fetches remote art into `~/.cache/omarchy/angelos.lyrics/art/` |
 | `python3` | beat grid, loudness glow | runs the helper scripts in `scripts/` |
-| `python-numpy` | beat grid (`osu-beats.py`) | when missing, the script reports an idle `numpy` reason and the beat grid stays off |
+| `python-numpy` | beat grid (`osu-beats.py`) | optional accelerator; when missing, `beat-fallback.py` runs the same tracker with the standard library (slower, no install needed) |
 | `cava`, `pw-record`, `pw-dump`, `pactl` | loudness glow | reads the player's own stream; without PipeWire tools the glow stays off |
 | network access to `lrclib.net` | fetching lyrics | the primary source; the other sources are optional |
 
