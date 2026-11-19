@@ -57,7 +57,9 @@ Singleton {
     // the multitrack pair the script found the player on (main / AUX0/1), or was given
     property string track: ""
 
-    // the player's own stream in PipeWire: the MPRIS player matched by name
+    // the player's own stream in PipeWire: the MPRIS player matched by name.
+    // Only capture a positively identified stream — never fall back to another
+    // application's audio when the match is ambiguous or missing.
     readonly property var stream: {
         const p = Lib.Lyrics.player;
         const list = Lib.Audio.appStreams;
@@ -70,7 +72,7 @@ Singleton {
             const hay = [pr["application.name"], bin, pr["application.id"], pr["node.name"]].filter(v => !!v).join(" ").toLowerCase();
             return keys.some(k => hay.includes(k) || (bin && k.includes(bin)) || k.includes(String(pr["application.name"] || "~").toLowerCase()));
         };
-        return list.find(hit) || (list.length === 1 ? list[0] : null);
+        return list.find(hit) || null;
     }
     readonly property string streamSerial: stream && stream.properties ? String(stream.properties["object.serial"] || "") : ""
 

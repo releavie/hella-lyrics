@@ -1725,7 +1725,7 @@ Singleton {
                             next();
                     });
                 });
-            steps.kugou = (next, done) => http("http://mobilecdn.kugou.com/api/v3/search/song?" + query({
+            steps.kugou = (next, done) => http("https://mobilecdn.kugou.com/api/v3/search/song?" + query({
                         "format": "json",
                         "keyword": (c.artist + " " + c.title).trim(),
                         "page": 1,
@@ -2147,7 +2147,7 @@ Singleton {
                 });
             done();
         });
-        http("http://mobilecdn.kugou.com/api/v3/search/song?" + query({
+        http("https://mobilecdn.kugou.com/api/v3/search/song?" + query({
             "format": "json",
             "keyword": text,
             "page": 1,

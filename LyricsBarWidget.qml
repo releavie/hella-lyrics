@@ -524,7 +524,7 @@ BarWidget {
         // have not reported their implicit sizes yet. Both sliders are always
         // in the card, so reserve their room up front: this also leaves space
         // for the provider dropdown's own list to open inside the card.
-        contentHeight: popup.fittedContentHeight(420)
+        contentHeight: popup.fittedContentHeight(380)
 
         Column {
             id: column
@@ -554,7 +554,8 @@ BarWidget {
                 Button {
                     id: closeButton
                     anchors.right: parent.right
-                    iconText: "✕"
+                    // nf-fa-times: same solid weight as the reset refresh glyph
+                    iconText: ""
                     fontFamily: root.fontFamily
                     tooltipText: "Close"
                     foreground: root.tint
@@ -681,12 +682,11 @@ BarWidget {
                 spacing: Style.space(4)
 
                 Dropdown {
-                    // A little narrower and shorter than the card: its list
-                    // opens inside this window, so a full-width trigger with
-                    // tall rows ran past the bottom edge.
-                    width: parent.width - Style.space(20)
+                    // Full width to match the rest of the card; the short rows
+                    // keep all 13 providers inside the popup window.
+                    width: parent.width
                     rowHeight: 24
-                    popupRowHeight: 20
+                    popupRowHeight: 16
                     foreground: root.tint
                     label: "Lyrics provider"
                     value: root.provider
