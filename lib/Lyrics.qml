@@ -219,25 +219,48 @@ Singleton {
         return sung === 0 || sung >= l.text.length || l.text[sung] === " " ? sung : space < 0 ? l.text.length : space;
     }
     // a line without its words' times: the time to the next line shared by the words' syllables
-    // (their vowels), sung at most 0.3 s a syllable — the rest of a long gap is a pause
+    // (their vowels, or one per character where a word is written in kana, Han or Hangul), sung
+    // at most 0.3 s a syllable — the rest of a long gap is a pause
     function estimateWords(ls, total) {
         const vowels = /[аеёиоуыэюяaeiouyäöüéèàáíóú]/gi;
+        const syllabic = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/g;
+        const wordChars = /[0-9A-Za-z\u00c0-\u024f\u0400-\u04ff\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
+        function splitWords(text) {
+            const out = [];
+            let lead = "";
+            for (const token of text.trim().split(/\s+/).filter(Boolean)) {
+                if (wordChars.test(token)) {
+                    out.push((lead ? lead + " " : "") + token);
+                    lead = "";
+                } else if (out.length) {
+                    out[out.length - 1] += " " + token;
+                } else {
+                    lead += (lead ? " " : "") + token;
+                }
+            }
+            if (lead)
+                out.push(lead);
+            return out;
+        }
+        function syllables(word) {
+            const wide = word.match(syllabic) || [];
+            const narrow = word.replace(syllabic, "").match(vowels) || [];
+            return Math.max(1, wide.length + narrow.length);
+        }
         for (let i = 0; i < ls.length; i++) {
             const l = ls[i];
-            // a dash or a lone mark is no word of its own: it goes with the one before
-            const words = l.w || !l.text ? [] : l.text.split(" ").reduce((a, x) => {
-                if (a.length && !/[0-9A-Za-z\u00c0-\u024f\u0400-\u04ff\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]/.test(x))
-                    a[a.length - 1] += " " + x;
-                else
-                    a.push(x);
-                return a;
-            }, []);
+            // a source that supplied the words' own times also supplied their spacing;
+            // a guess here would replace the singer's timing with ours
+            if (l.w || !l.text)
+                continue;
+            const words = splitWords(l.text);
             if (words.length < 2)
                 continue;
             const end = i + 1 < ls.length ? ls[i + 1].t : total > l.t ? total : l.t + 4;
-            const syl = words.map(x => Math.max(1, (x.match(vowels) || []).length));
+            const syl = words.map(syllables);
             const sum = syl.reduce((a, b) => a + b, 0);
-            const span = Math.min((end - l.t) * 0.85, sum * 0.3);
+            // leave the tail of a long gap as a pause, and never run into the next line
+            const span = Math.min(Math.max(0.2, end - l.t) * 0.85, sum * 0.3);
             const ws = [], s = [""];
             let acc = 0;
             for (let k = 0; k < words.length; k++) {
@@ -251,6 +274,17 @@ Singleton {
             });
         }
         return ls;
+    }
+
+    // a sped up / slowed version stretches every time in the line, not just its start
+    function scaleLine(l, k) {
+        if (k === 1)
+            return l;
+        const out = Object.assign({}, l, { "t": l.t * k });
+        for (const key of [ "w", "ws" ])
+            if (l[key])
+                out[key] = l[key].map(x => x * k);
+        return out;
     }
     property bool visibleToggle: true
 
@@ -546,11 +580,7 @@ Singleton {
             status = "instrumental";
         } else if (data.syncedLyrics) {
             const k = data.scale > 0.5 && data.scale < 2 ? data.scale : 1;
-            lines = estimateWords(parseLrc(data.syncedLyrics).map(l => k === 1 ? l : Object.assign({}, l, {
-                    "t": l.t * k
-                }, l.w ? {
-                    "w": l.w.map(x => x * k)
-                } : {})), length);
+            lines = estimateWords(parseLrc(data.syncedLyrics).map(l => scaleLine(l, k)), length);
             status = lines.length ? "ok" : "notfound";
             wordsUpgrade(trackKey, data);
         } else if (data.plainLyrics) {
@@ -657,7 +687,7 @@ Singleton {
         // time, and the text is not a song's. The session keeps it, the disk does not. A pinned
         // provider's answer is likewise for this listen only: unpinning must not inherit it as
         // the "auto" result.
-        if (netBlocked || pinnedSource)
+        if (!cacheable())
             return;
         _diskQueue.push({
             "path": cacheFile(key),
@@ -726,6 +756,17 @@ Singleton {
     readonly property bool messenger: isMessenger(player)
     property string _consentKey: ""     // the track the user asked to search for by hand
     readonly property bool netBlocked: messenger && _consentKey !== trackKey && Lib.Config.lyrics.searchInMessengers !== true
+
+    // where a search may look, and whether its answer may be kept on disk: one place, so the
+    // strict provider pin and the messenger's privacy gate cannot drift apart
+    function sourceOrder() {
+        if (netBlocked)
+            return sources.filter(s => s === "local" || s === "player")
+        return pinnedSource ? [ pinnedSource ] : sources
+    }
+    function cacheable() {
+        return !netBlocked && !pinnedSource
+    }
 
     // "Artist - Song (Official Video) [4K]" from a browser or YouTube → {artist, title}
     function clean(t, a) {
@@ -1367,8 +1408,7 @@ Singleton {
         // a messenger's metadata stays on the machine unless the user asked (netBlocked): only the
         // sources that read the disk and the player's own metadata are left. A provider pinned
         // in the player card is the only one asked, and nothing upgrades over it.
-        const order = netBlocked ? sources.filter(s => s === "local" || s === "player")
-            : pinnedSource ? [pinnedSource] : sources;
+        const order = sourceOrder();
         const steps = [];
         let plain = null;  // best unsynced text of the right song met on the way
         let stepId = 0;

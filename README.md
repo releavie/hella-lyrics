@@ -116,7 +116,10 @@ endpoints also return a `lyricsfile` — a small YAML of the same lines with eac
 word's own start — and that is what the plugin reads. A worded hit is preferred
 over a line-timed one of the same song, and older caches are re-checked against
 lrclib once so a track cached before this support does not keep another store's
-guess.
+guess. A plain, line-timed LRC gets guessed word times from its syllables (one
+per character where a word is written in kana, Han or Hangul); a source that
+supplied its own word times is never re-estimated, and a sped-up or slowed-down
+track stretches every word time with the line.
 
 A line-timed result is shown as soon as it arrives. The word-capable sources
 then get one chance each, in the same order, and the line is replaced if one
@@ -125,8 +128,10 @@ delaying the first line.
 
 Pinning a provider from the player card is strict: only that source is asked,
 no other store upgrades over it, and the track is fetched again the moment the
-pin changes. The card shows which source answered and whether the words are the
-source's own or guessed from the line's timing.
+pin changes. Its answer is for that listen only: it is not written to the disk
+cache, so unpinning never inherits it as the "auto" result. The card shows which
+source answered and whether the words are the source's own or guessed from the
+line's timing.
 
 Sync follows the player's real MPRIS `Position` (read with `busctl` five times a
 second), not the shell's wall-clock extrapolation. A player that buffers or

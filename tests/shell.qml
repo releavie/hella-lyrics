@@ -209,6 +209,37 @@ ShellRoot {
            lyr.lrclibText({ "syncedLyrics": "[00:01.00]one\n[00:02.00]two" }).indexOf("[00:01.00]one") === 0)
         // the words' own time by default: the popup's slider is the only lead
         ok("words land on their own time by default", lyr.wordLead === 0, "lead=" + lyr.wordLead)
+        // ---- the guessed word times for plain LRC ----
+        var guessed = lyr.estimateWords(lyr.parseLrc("[00:01.00]one two\n[00:03.00]three four"), 10)
+        ok("a plain line gets guessed word times",
+           guessed[0].ws.length === 2 && guessed[0].ws[0] === 1 && guessed[0].ws[1] > 1,
+           JSON.stringify(guessed[0].ws))
+        ok("guessed words still read as the line", guessed[0].s.join("") === "one two",
+           JSON.stringify(guessed[0].s))
+        var enhanced = lyr.parseLrc("[00:01.00]<00:01.00>one <00:01.50>two")
+        var kept = lyr.estimateWords(enhanced, 10)
+        ok("the source's own words are never re-estimated",
+           kept[0].ws === undefined && kept[0].w.length === 2 && kept[0].s.join("") === "one two",
+           JSON.stringify(kept[0]))
+        var punct = lyr.estimateWords(lyr.parseLrc("[00:01.00](I can't), really\n[00:02.00]next"), 10)[0]
+        ok("a mark before or after a word stays with it",
+           punct.s.join("") === "(I can't), really" && punct.ws.length === 3,
+           JSON.stringify(punct.s))
+        var cjk = lyr.estimateWords(lyr.parseLrc("[00:00.00]私は 彼女を 愛してる\n[00:04.00]次"), 10)[0]
+        ok("kana and Han words are weighed per character",
+           cjk.ws.length === 3 && Math.abs(cjk.ws[1] - 0.6) < 0.01 && Math.abs(cjk.ws[2] - 1.5) < 0.01,
+           JSON.stringify(cjk.ws))
+        var stretched = lyr.scaleLine({ "t": 1, "w": [ 1.1, 1.4 ], "ws": [ 1.05, 1.35 ] }, 2)
+        ok("a tempo version stretches every word time, guessed or not",
+           stretched.t === 2 && Math.abs(stretched.w[1] - 2.8) < 0.001
+           && Math.abs(stretched.ws[1] - 2.7) < 0.001,
+           JSON.stringify(stretched))
+        var scaledLines = lyr.parseLrc("[00:01.00]one two\n[00:02.00]three four").map(function (l) {
+            return lyr.scaleLine(l, 1.5)
+        })
+        var scaledGuess = lyr.estimateWords(scaledLines, 10)[0]
+        ok("a tempo version's guessed words follow the stretched line",
+           Math.abs(scaledGuess.ws[1] - 2.1) < 0.01, JSON.stringify(scaledGuess.ws))
         var ttml = '<tt><body><div><p begin="1.5" end="3"><span begin="1.5">Hello</span> '
             + '<span begin="2">world</span></p><p begin="4">Next line</p></div></body></tt>'
         var tl = lyr.ttmlToLrc(ttml)
@@ -524,10 +555,25 @@ ShellRoot {
             ok("the pin is persisted",
                fakeBar.writes.length === 1 && fakeBar.writes[0].entry.provider === "local",
                JSON.stringify(fakeBar.writes))
+            ok("a pin asks only that one source", JSON.stringify(w.lyr.sourceOrder()) === '["local"]',
+               JSON.stringify(w.lyr.sourceOrder()))
+            ok("a pin's answer is never written to the disk cache", w.lyr.cacheable() === false)
+            w.saveSetting("provider", "apple music")
+            ok("a friendly provider name maps to its store", w.lyr.pinnedSource === "lrccx",
+               "pin=" + w.lyr.pinnedSource)
+            w.saveSetting("provider", "lrclib, netease")
+            ok("a pin is one provider, not a list", w.lyr.pinnedSource === "lrclib",
+               "pin=" + w.lyr.pinnedSource)
+            w.saveSetting("provider", "not-a-store")
+            ok("an unknown provider is the same as auto", w.lyr.pinnedSource === "",
+               "pin=" + w.lyr.pinnedSource)
             w.saveSetting("provider", "")
             ok("auto is a provider choice too",
                w.provider === "" && w.lyr.pinnedSource === "" && w.sourceStatus.length > 0,
                w.sourceStatus)
+            ok("auto searches the whole order and may cache it",
+               w.lyr.sourceOrder().length === w.lyr.allSources.length && w.lyr.cacheable() === true,
+               "n=" + w.lyr.sourceOrder().length)
             w.bar = null
 
             // ---- words ahead: the popup's own lead, in song milliseconds ----
