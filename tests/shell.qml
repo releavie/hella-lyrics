@@ -207,6 +207,18 @@ ShellRoot {
            lyr.hasWordTimes(lyr.lrclibText(hit)) === true, String(lyr.lrclibText(hit)).slice(0, 60))
         ok("an lrclib hit without a file keeps its LRC",
            lyr.lrclibText({ "syncedLyrics": "[00:01.00]one\n[00:02.00]two" }).indexOf("[00:01.00]one") === 0)
+        // the record policy: the worded hit stays first even when the player's
+        // length is closer to a line-timed hit of the same song
+        var policySong = { "title": "Hours in Silence", "artist": "Someone" }
+        var lineHit = { "trackName": "Hours in Silence", "artistName": "Someone", "duration": 200,
+                        "syncedLyrics": "[00:01.00]only a line" }
+        var wordHit = { "trackName": "Hours in Silence", "artistName": "Someone", "duration": 205,
+                        "lyricsfile": yaml, "syncedLyrics": "[00:00.03]It's getting late" }
+        var policyRank = lyr.rankLrclibHits(lyr.matchedLrclib([ lineHit, wordHit ], policySong, 200), policySong, 200)
+        ok("a worded hit wins over a closer line-timed one",
+           policyRank.length === 2 && policyRank[0].hit === wordHit
+           && !lyr.hasWordTimes(policyRank[1].lrc),
+           policyRank.map(function (x) { return x.hit.duration + ":" + lyr.hasWordTimes(x.lrc) }).join(" "))
         // the words' own time by default: the popup's slider is the only lead
         ok("words land on their own time by default", lyr.wordLead === 0, "lead=" + lyr.wordLead)
         // ---- the guessed word times for plain LRC ----

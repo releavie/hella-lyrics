@@ -897,6 +897,24 @@ Singleton {
             return false;
         return true;
     }
+    // An lrclib hit is a candidate before its lyrics are read: the same-song check above.
+    function matchedLrclib(list, c, d) {
+        return (Array.isArray(list) ? list : []).filter(r => matches({
+            "title": r.trackName || r.name,
+            "artist": r.artistName,
+            "duration": r.duration
+        }, c, d));
+    }
+    // A hit with the words' own times (its lyricsfile) beats a line-timed one of the same
+    // song, even when the player's record is closer in length to the line-timed one: those
+    // words are where the player's own karaoke puts them. Among equals, closest length wins.
+    function rankLrclibHits(matched, c, d) {
+        const scored = matched.map(r => ({ "hit": r, "lrc": lrclibText(r) })).filter(x => x.lrc);
+        scored.sort((x, y) => (hasWordTimes(y.lrc) ? 1 : 0) - (hasWordTimes(x.lrc) ? 1 : 0)
+            || Math.abs((x.hit.duration || 0) - d) - Math.abs((y.hit.duration || 0) - d));
+        return scored;
+    }
+
     // the plain name to try when the first round found nothing: no version, the first artist only
     readonly property var fallback: {
         const c = cleaned;
@@ -1461,23 +1479,11 @@ Singleton {
             const pickLrclib = list => {
                 if (!Array.isArray(list))
                     return null;
-                const ok = list.filter(r => root.matches({
-                        "title": r.trackName || r.name,
-                        "artist": r.artistName,
-                        "duration": r.duration
-                    }, c, d));
+                const ok = root.matchedLrclib(list, c, d);
                 keepPlain(ok.find(r => r.plainLyrics) ? Object.assign({
                     "source": "lrclib"
                 }, ok.find(r => r.plainLyrics)) : null);
-                // a hit with the words' own times (its lyricsfile) beats a line-timed one of
-                // the same song; among equals the closest length wins
-                const scored = ok.map(r => ({
-                    "hit": r,
-                    "lrc": root.lrclibText(r)
-                })).filter(x => x.lrc);
-                scored.sort((x, y) => (root.hasWordTimes(y.lrc) ? 1 : 0) - (root.hasWordTimes(x.lrc) ? 1 : 0)
-                    || Math.abs((x.hit.duration || 0) - d) - Math.abs((y.hit.duration || 0) - d));
-                const best = scored[0];
+                const best = root.rankLrclibHits(ok, c, d)[0];
                 return best ? {
                     "source": "lrclib",
                     "syncedLyrics": best.lrc,
