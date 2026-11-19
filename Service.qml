@@ -29,6 +29,8 @@ Item {
         if (settings.searchInMessengers !== undefined) patch.searchInMessengers = settings.searchInMessengers
         if (settings.offsetMs !== undefined) patch.offsetMs = Number(settings.offsetMs) || 0
         if (settings.sources !== undefined) patch.sources = Lib.Config.parseSources(settings.sources)
+        if (settings.wordLeadMs !== undefined) patch.wordLeadMs = Number(settings.wordLeadMs) || 0
+        if (settings.provider !== undefined) patch.provider = Lib.Config.parseSources(settings.provider)[0] || ""
         Lib.Config.setLyrics(patch)
     }
 
@@ -45,6 +47,7 @@ Item {
                 "status": Lib.Lyrics.status,
                 "hasLyrics": Lib.Lyrics.hasLyrics,
                 "source": Lib.Lyrics.source || "",
+                "pinned": Lib.Lyrics.pinnedSource,
                 // diagnostics for the reveal: a line that arrives mid-song has to
                 // be distinguishable from one that starts from its own zero
                 "position": Math.round(Lib.Lyrics.position * 100) / 100,
@@ -52,6 +55,7 @@ Item {
                 "stalled": Lib.Lyrics.stalled,
                 "index": Lib.Lyrics.index,
                 "wordTimed": Lib.Lyrics.wordTimed,
+                "wordsEstimated": Lib.Lyrics.wordsEstimated,
                 "wordChars": Lib.Lyrics.wordChars,
                 "lineStart": Lib.Lyrics.lineStart,
                 "lineEnd": Lib.Lyrics.lineEnd,

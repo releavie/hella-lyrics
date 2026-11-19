@@ -44,6 +44,10 @@ BarWidget {
     readonly property int offsetMs: Number(setting("offsetMs", 0)) || 0
     // comma-separated search order; empty keeps the engine's built-in order
     readonly property string sourceOrder: String(setting("sources", "") || "")
+    // how early a word comes up: 0 is its own time (what the player's karaoke shows)
+    readonly property int wordLeadMs: Number(setting("wordLeadMs", 0)) || 0
+    // the one provider the player card pins; "" keeps the search order
+    readonly property string provider: String(setting("provider", "") || "")
 
     function pushSettings() {
         // setLyrics assigns a fresh object: that assignment is what re-evaluates
@@ -55,7 +59,9 @@ BarWidget {
             "preferPlayer": prefer,
             "searchInMessengers": messengerSearch,
             "offsetMs": offsetMs,
-            "sources": Lib.Config.parseSources(sourceOrder)
+            "sources": Lib.Config.parseSources(sourceOrder),
+            "wordLeadMs": wordLeadMs,
+            "provider": Lib.Config.parseSources(provider)[0] || ""
         }
         Lib.Config.setLyrics(patch)
         if (svc && typeof svc.updateConfig === "function")
@@ -68,6 +74,8 @@ BarWidget {
     onMessengerSearchChanged: pushSettings()
     onOffsetMsChanged: pushSettings()
     onSourceOrderChanged: pushSettings()
+    onWordLeadMsChanged: pushSettings()
+    onProviderChanged: pushSettings()
     Component.onCompleted: {
         pushSettings()
         shown = line
@@ -132,6 +140,32 @@ BarWidget {
     readonly property bool canPlay: !!popupPlayer && (popupPlayer.canTogglePlaying === true
         || popupPlayer.canPlay === true || popupPlayer.canPause === true)
     readonly property bool canNext: !!popupPlayer && popupPlayer.canGoNext === true
+
+    // the switcher's list: auto (the search order) or one pinned store
+    readonly property var providerOptions: [
+        { "value": "", "label": "Auto — best source" },
+        { "value": "lrclib", "label": "LrcLib" },
+        { "value": "netease", "label": "NetEase" },
+        { "value": "amll", "label": "AMLL" },
+        { "value": "lrccx", "label": "Apple Music" },
+        { "value": "betterlyrics", "label": "BetterLyrics" },
+        { "value": "kugou", "label": "Kugou" },
+        { "value": "qq", "label": "QQ Music" },
+        { "value": "musixmatch", "label": "Musixmatch" },
+        { "value": "genius", "label": "Genius" },
+        { "value": "ovh", "label": "lyrics.ovh" },
+        { "value": "local", "label": "Local .lrc file" },
+        { "value": "player", "label": "Player's own text" }
+    ]
+    // what answered, and whether its words are the source's or guessed from the line
+    readonly property string sourceStatus: {
+        if (lyr.status === "loading")
+            return "Looking…"
+        const src = String(lyr.source || "")
+        if (!lyr.hasLyrics)
+            return src ? src + " · no timed lyrics" : "No lyrics found"
+        return src + " · " + (lyr.wordsEstimated ? "word times guessed" : lyr.wordTimed ? "word timings" : "line timings")
+    }
 
     readonly property color tint: bar ? bar.barForeground : "#cacccc"
     readonly property color accent: Commons.Color.accent
@@ -623,11 +657,76 @@ BarWidget {
                 }
             }
 
-            // ---- settings: the opacity of the line ----
+            // ---- settings: where the line comes from, how it moves, how solid it is ----
             Column {
                 width: parent.width
                 spacing: Style.space(4)
                 visible: root.settingsOpen
+
+                // the provider switcher: pin one store (and refetch at once), or let the
+                // search order choose. The line under it says what actually answered.
+                Dropdown {
+                    width: parent.width
+                    foreground: root.tint
+                    label: "Lyrics provider"
+                    value: root.provider
+                    options: root.providerOptions
+                    onChanged: function (v) { root.saveSetting("provider", v) }
+                }
+
+                Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: root.sourceStatus
+                    color: Qt.darker(root.tint, 1.3)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                }
+
+                Item {
+                    width: parent.width
+                    height: leadLabel.implicitHeight
+
+                    Text {
+                        id: leadLabel
+                        textFormat: Text.PlainText
+                        text: "Words ahead"
+                        color: root.tint
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        textFormat: Text.PlainText
+                        text: (root.wordLeadMs > 0 ? "+" : "") + root.wordLeadMs + " ms"
+                        color: Qt.darker(root.tint, 1.3)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                PanelSlider {
+                    width: parent.width
+                    bar: root.bar
+                    minimum: -300
+                    maximum: 600
+                    step: 50
+                    integer: true
+                    value: root.wordLeadMs
+                    // a word comes up this much before its own time; 0 is on the
+                    // sung word, which is what the player's karaoke shows. The
+                    // drag is live, only the release writes shell.json.
+                    onMoved: function (v) { Lib.Config.setLyrics({ "wordLeadMs": Math.round(v) }) }
+                    onReleased: function (v) {
+                        Lib.Config.setLyrics({ "wordLeadMs": Math.round(v) })
+                        root.saveSetting("wordLeadMs", Math.round(v))
+                    }
+                }
 
                 Item {
                     width: parent.width
