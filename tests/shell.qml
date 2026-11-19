@@ -488,6 +488,15 @@ ShellRoot {
             ok("the provider list fits inside the card",
                cardCol !== null && cardCol.height > 0 && listTop + maxList <= cardCol.height,
                "top=" + listTop + " list=" + maxList + " card=" + (cardCol ? cardCol.height : 0))
+            if (dropdown) {
+                dropdown.changed("netease")
+                ok("picking a provider in the card's dropdown pins it",
+                   w.provider === "netease" && w.lyr.pinnedSource === "netease",
+                   "pin=" + w.lyr.pinnedSource)
+                w.saveSetting("provider", "")
+            } else {
+                ok("picking a provider in the card's dropdown pins it", false, "no dropdown")
+            }
             ok("the transport buttons report booleans",
                typeof w.canPrev === "boolean" && typeof w.canPlay === "boolean" && typeof w.canNext === "boolean",
                "prev=" + w.canPrev + " play=" + w.canPlay + " next=" + w.canNext)
