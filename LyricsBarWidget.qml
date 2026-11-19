@@ -49,6 +49,19 @@ BarWidget {
     // the one provider the player card pins; "" keeps the search order
     readonly property string provider: String(setting("provider", "") || "")
 
+    // the card's reset logo: back to the defaults for the three things it owns
+    function resetCardSettings() {
+        var entry = { "id": moduleName }
+        for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
+        entry.provider = ""
+        entry.opacity = 100
+        entry.wordLeadMs = 0
+        root.settings = entry
+        if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
+            bar.shell.updateEntryInline(moduleName, entry)
+        pushSettings()
+    }
+
     function pushSettings() {
         // setLyrics assigns a fresh object: that assignment is what re-evaluates
         // the engine's bindings on these settings
@@ -130,9 +143,16 @@ BarWidget {
     property bool popupOpen: false
     // the popup's sliders (opacity, words ahead), collapsed until the gear is hit
     property bool settingsOpen: false
+    // Bar.findPanelWidget (shell.summon/toggle and the bar's own popout
+    // coordinator) requires open/close/opened on the bar-widget root. Without
+    // them the card has no keyboard route and only closes on an outside click.
+    readonly property bool opened: popupOpen
+    function open() { popupOpen = true }
     function togglePopup() { popupOpen = !popupOpen }
-    // the bar calls this when it hides; a popup anchored to a hidden bar must not stay
-    function close() { popupOpen = false }
+    function close() { popupOpen = false; settingsOpen = false }
+    // the bar prefers this when another panel takes over, so it does not
+    // re-trigger the generic close path mid-switch
+    function closeForPopoutSwitch() { close() }
 
     // the player the lyrics follow is the player the popup controls
     readonly property var popupPlayer: lyr.player
@@ -500,12 +520,47 @@ BarWidget {
         owner: root
         open: root.popupOpen
         contentWidth: popup.fittedContentWidth(Style.space(300))
-        contentHeight: popup.fittedContentHeight(column.implicitHeight)
+        // The window takes its size on first map, when the column's children
+        // have not reported their implicit sizes yet. Derive it from the rows
+        // themselves so the card opens full instead of clipping the switcher.
+        contentHeight: popup.fittedContentHeight(root.settingsOpen ? 420 : 320)
 
         Column {
             id: column
             anchors.fill: parent
             spacing: Style.space(10)
+
+            // the card's own header: reset the three settings it owns, and a
+            // plain close so the card can always be dismissed from inside it
+            Item {
+                width: parent.width
+                // A fixed height matters: a PopupWindow takes its size when it
+                // first maps, and a Button's implicitHeight is still 0 then.
+                height: Style.space(34)
+
+                Button {
+                    id: resetButton
+                    anchors.left: parent.left
+                    iconText: "󰔄"
+                    tooltipText: "Reset provider, opacity and words ahead"
+                    foreground: root.tint
+                    horizontalPadding: Style.spacing.controlPaddingX
+                    verticalPadding: Style.spacing.controlPaddingY
+                    onClicked: root.resetCardSettings()
+                }
+
+                Button {
+                    id: closeButton
+                    anchors.right: parent.right
+                    iconText: "✕"
+                    fontFamily: root.fontFamily
+                    tooltipText: "Close"
+                    foreground: root.tint
+                    horizontalPadding: Style.spacing.controlPaddingX
+                    verticalPadding: Style.spacing.controlPaddingY
+                    onClicked: root.close()
+                }
+            }
 
             Row {
                 spacing: Style.space(10)
@@ -630,6 +685,9 @@ BarWidget {
             // are both readable the moment the card opens, and a pick refetches at once.
             Column {
                 width: parent.width
+                // same reason as the header: the card must know its full size
+                // on the first frame, before the dropdown has laid out
+                height: 64
                 spacing: Style.space(4)
 
                 Dropdown {
@@ -688,6 +746,7 @@ BarWidget {
             // ---- settings: how it moves, how solid it is ----
             Column {
                 width: parent.width
+                height: root.settingsOpen ? 86 : 0
                 spacing: Style.space(4)
                 visible: root.settingsOpen
 

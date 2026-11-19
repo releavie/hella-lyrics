@@ -410,6 +410,22 @@ ShellRoot {
             w.togglePopup()
             w.close()
             ok("the bar's hide closes it too", w.popupOpen === false)
+            w.settingsOpen = true
+            w.close()
+            ok("closing also folds the settings row", w.settingsOpen === false)
+            w.open()
+            ok("shell summon can open the card", w.opened === true && w.popupOpen === true)
+            w.closeForPopoutSwitch()
+            ok("a popout switch closes it", w.opened === false && w.popupOpen === false)
+            // A real PopupWindow takes its size on first map; the card must
+            // already be full then, or the switcher renders outside the window.
+            var card = null
+            for (var ci = 0; ci < w.data.length; ci++)
+                if (w.data[ci] && w.data[ci].anchorItem === w && w.data[ci].contentHeight !== undefined)
+                    card = w.data[ci]
+            ok("the card is full height before it first opens",
+               card !== null && card.contentHeight >= 300,
+               "contentHeight=" + (card ? card.contentHeight : "none"))
             ok("the transport buttons report booleans",
                typeof w.canPrev === "boolean" && typeof w.canPlay === "boolean" && typeof w.canNext === "boolean",
                "prev=" + w.canPrev + " play=" + w.canPlay + " next=" + w.canNext)
@@ -494,6 +510,27 @@ ShellRoot {
             ok("and back to the sung word", w.wordLeadMs === 0 && w.lyr.wordLead === 0,
                "lead=" + w.lyr.wordLead)
             w.settingsOpen = false
+
+            // ---- the card's reset logo ----
+            fakeBar.writes = []
+            w.bar = fakeBar
+            w.saveSetting("provider", "netease")
+            w.saveSetting("opacity", 40)
+            w.saveSetting("wordLeadMs", 150)
+            w.resetCardSettings()
+            ok("reset restores the provider, opacity and lead",
+               w.provider === "" && w.opacityPct === 100 && w.wordLeadMs === 0,
+               "provider=" + w.provider + " opacity=" + w.opacityPct + " lead=" + w.wordLeadMs)
+            ok("reset reaches the engine too",
+               w.lyr.pinnedSource === "" && w.lyr.wordLead === 0,
+               "pin=" + w.lyr.pinnedSource + " lead=" + w.lyr.wordLead)
+            ok("and is written to shell.json",
+               fakeBar.writes.length === 4
+               && fakeBar.writes[3].entry.provider === ""
+               && fakeBar.writes[3].entry.opacity === 100
+               && fakeBar.writes[3].entry.wordLeadMs === 0,
+               JSON.stringify(fakeBar.writes))
+            w.bar = null
 
             // ---- the cover on the left ----
             ok("artwork defaults to the cover", w.artwork === "cover", w.artwork)
