@@ -16,7 +16,7 @@ import "lib" as Lib
 // the widget's to own. What is here is drawing, the settings handoff and clicks.
 BarWidget {
     id: root
-    moduleName: "angelos.lyrics"
+    moduleName: "hella.lyrics"
 
     // ---- the service, or the singletons directly ----------------------------
     // Through the shell when this plugin's service is up (the normal case: it

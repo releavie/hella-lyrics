@@ -1,4 +1,4 @@
-# Live Lyrics
+# Hella Lyrics
 
 Live synchronized lyrics in the Omarchy bar: the current line arrives
 character by character while it is sung, and switches to a word-by-word karaoke
@@ -58,20 +58,20 @@ the plugin never runs package management itself. The beat grid works without
 omarchy plugin add https://github.com/ilyamaximusaws/omarchy-live-lyrics.git --enable
 ```
 
-Then place the widget: `omarchy plugin enable angelos.lyrics center` (or move it
+Then place the widget: `omarchy plugin enable hella.lyrics center` (or move it
 in the bar settings). Nothing else to configure — with lyrics available for the
 current track the line appears on its own.
 
 ## Remove
 
 ```bash
-omarchy plugin remove angelos.lyrics
+omarchy plugin remove hella.lyrics
 ```
 
 To keep the plugin but hide the line, disable it:
 
 ```bash
-omarchy plugin disable angelos.lyrics
+omarchy plugin disable hella.lyrics
 ```
 
 ## Settings
@@ -105,8 +105,8 @@ lyrics it changes.
 The card's header has a circular-arrow reset icon that puts those three settings
 back to their defaults (Auto, 100%, 0 ms) and saves them, and a close icon.
 Clicking the line
-again, an outside click, another panel taking over, or `shell hide angelos.lyrics`
-also closes it; `shell summon angelos.lyrics '{}'` opens it.
+again, an outside click, another panel taking over, or `shell hide hella.lyrics`
+also closes it; `shell summon hella.lyrics '{}'` opens it.
 
 ### Sources
 
@@ -129,8 +129,8 @@ track stretches every word time with the line.
 ### Exact words for one song
 
 When no source has word times, you can supply them yourself in
-`~/.config/omarchy/angelos.lyrics/word-times.json`
-(`$XDG_CONFIG_HOME/omarchy/angelos.lyrics/word-times.json` if set). The directory
+`~/.config/omarchy/hella.lyrics/word-times.json`
+(`$XDG_CONFIG_HOME/omarchy/hella.lyrics/word-times.json` if set). The directory
 is created on first start; see [`examples/word-times.json`](examples/word-times.json)
 for the format. A track is matched by artist and title, a line by its start time
 (`t`, in seconds) and optionally its `text`; `words[].text` includes the space

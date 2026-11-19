@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "id": "angelos.lyrics",
-  "name": "Live Lyrics",
+  "id": "hella.lyrics",
+  "name": "Hella Lyrics",
   "version": "1.3.5",
   "author": "Iliya Brook",
   "license": "MIT",
   "repository": "https://github.com/ilyamaximusaws/omarchy-live-lyrics",
-  "description": "Live synchronized lyrics in your bar: character-by-character reveal, word-by-word karaoke, beat alignment grid, and loudness glow. A port of the angelOS lyrics bar and engine by MixaDoDs (MIT).",
+  "description": "Hella Lyrics: live synchronized lyrics in your bar: character-by-character reveal, word-by-word karaoke, beat alignment grid, and loudness glow. A port of the angelOS lyrics bar and engine by MixaDoDs (MIT).",
   "kinds": [
     "bar-widget",
     "service"
@@ -17,7 +17,7 @@
     "service": "Service.qml"
   },
   "barWidget": {
-    "displayName": "Live Lyrics",
+    "displayName": "Hella Lyrics",
     "description": "Synchronized live lyrics for current MPRIS track",
     "category": "Audio",
     "allowMultiple": false,

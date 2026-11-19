@@ -81,7 +81,7 @@ def capture(target, channels, positions, rate, name, passive=True):
         sys.exit(2)
     # passive: follows the player without keeping anything awake; the console's mix
     # source may be suspended, so that capture is an ordinary one and wakes it up
-    props = "{ node.name = %s node.description = \"angelOS lyrics level\" node.dont-reconnect = true%s%s }" % (
+    props = "{ node.name = %s node.description = \"Hella Lyrics level\" node.dont-reconnect = true%s%s }" % (
         name, " node.passive = true" if passive else "", " stream.dont-remix = true" if positions else "")
     cmd = ["pw-record", "--raw", "--target", str(target), "--channels", str(channels),
            "--format", "f32", "--rate", str(rate), "--latency", "40ms", "-P", props]
@@ -166,8 +166,8 @@ def rode(player, mix, positions):
         sys.exit(2)
     pos = positions.split(",") if positions else None
     ref, out = Ring(8), Ring(8)
-    p1 = capture(player, 2, None, RATE, "angelos-lyrics-music")
-    p2 = capture(mix, 2, pos, RATE, "angelos-lyrics-mix", passive=False)
+    p1 = capture(player, 2, None, RATE, "hella-lyrics-music")
+    p2 = capture(mix, 2, pos, RATE, "hella-lyrics-mix", passive=False)
     for proc, ring in ((p1, ref), (p2, out)):
         threading.Thread(target=pump, args=(proc, ring, 2), daemon=True).start()
     emit = Emitter()
@@ -326,8 +326,8 @@ def rode_multitrack(player, source, positions, fixed=None):
     channels = len(positions)
     block = RATE // 50                     # 20 ms
     ref, mt = Ring(8), Blocks(channels, block)
-    p1 = capture(player, 2, None, RATE, "angelos-lyrics-music")
-    p2 = capture(source, channels, positions, RATE, "angelos-lyrics-mix", passive=False)
+    p1 = capture(player, 2, None, RATE, "hella-lyrics-music")
+    p2 = capture(source, channels, positions, RATE, "hella-lyrics-mix", passive=False)
     threading.Thread(target=pump, args=(p1, ref, 2), daemon=True).start()
     threading.Thread(target=pump_blocks, args=(p2, mt, channels), daemon=True).start()
     emit = Emitter()
@@ -456,7 +456,7 @@ def rode_multitrack(player, source, positions, fixed=None):
 def stream(target):
     rate = RATE if np is not None else 12000
     frame = rate // 20                     # 50 ms
-    proc = capture(target, 2, None, rate, "angelos-lyrics-level")
+    proc = capture(target, 2, None, rate, "hella-lyrics-level")
     emit = Emitter()
     level = FLOOR_DB
     import array

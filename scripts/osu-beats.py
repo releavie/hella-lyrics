@@ -114,7 +114,7 @@ def target(mode, names=(), pids=()):
 
 
 def recorder(node, sink, pos):
-    props = ("{ node.name = angelos-osu node.description = \"osu!mini beat tracker\" media.role = Music "
+    props = ("{ node.name = hella-osu node.description = \"osu!mini beat tracker\" media.role = Music "
              "node.always-process = true node.dont-fallback = true node.dont-reconnect = true node.dont-move = true "
              + ("stream.capture.sink = true " if sink else "") + "}")
     cmd = ["pw-record", "--target", node, "-P", props, "--rate", str(RATE), "--channels", str(len(pos)),

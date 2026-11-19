@@ -36,7 +36,7 @@ Item {
 
     ShellIpc {
         id: ipcHandler
-        target: "angelos.lyrics"
+        target: "hella.lyrics"
 
         function status(): string {
             return JSON.stringify({

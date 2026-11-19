@@ -9,7 +9,7 @@ cache and state are not in the picture.
     cp -r /usr/share/omarchy/shell/Ui /tmp/qsimp/qs/
 
     QML_IMPORT_PATH=/tmp/qsimp:/usr/lib/qt6/qml \
-      quickshell -p ~/.config/omarchy/plugins/angelos.lyrics/tests
+      quickshell -p ~/.config/omarchy/plugins/hella.lyrics/tests
 
 Every line printed starts with PORTTEST; the last line is the summary:
 

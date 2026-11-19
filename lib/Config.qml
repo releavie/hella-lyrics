@@ -92,7 +92,7 @@ Singleton {
 
     // ---- paths and readiness -------------------------------------------------
     readonly property string home: Quickshell.env("HOME")
-    readonly property string cacheDir: home + "/.cache/omarchy/angelos.lyrics"
+    readonly property string cacheDir: home + "/.cache/omarchy/hella.lyrics"
     // true here, always: the ported engine has no settings file of its own to
     // wait for — the shell reads the manifest schema before the plugin loads
     readonly property bool ready: true

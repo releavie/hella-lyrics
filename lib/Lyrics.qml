@@ -298,7 +298,7 @@ Singleton {
     }
 
     // ---- hand-edited word times ---------------------------------------------
-    // ~/.config/omarchy/angelos.lyrics/word-times.json (see README) can pin exact
+    // ~/.config/omarchy/hella.lyrics/word-times.json (see README) can pin exact
     // word starts for a track. It wins over every network source and over the
     // syllable guess; changing track or refetching reloads an edited file.
     property string wordTimesFile: Lib.Paths.wordTimesFile
@@ -816,7 +816,7 @@ Singleton {
                 cb(xhr.status, xhr.status === 200 ? xhr.responseText : "");
         };
         xhr.open("GET", url);
-        xhr.setRequestHeader("User-Agent", "angelOS-quickshell (https://github.com/MixaDoDs)");
+        xhr.setRequestHeader("User-Agent", "Hella Lyrics (local Quickshell plugin)");
         xhr.send();
     }
     function http(url, cb) {
@@ -831,7 +831,7 @@ Singleton {
             cb(xhr.status, body);
         };
         xhr.open("GET", url);
-        xhr.setRequestHeader("User-Agent", "angelOS-quickshell (https://github.com/MixaDoDs)");
+        xhr.setRequestHeader("User-Agent", "Hella Lyrics (local Quickshell plugin)");
         xhr.send();
     }
 

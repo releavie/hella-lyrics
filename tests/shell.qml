@@ -8,7 +8,7 @@ import Quickshell
 // the picture:
 //
 //   QML_IMPORT_PATH=/tmp/qsimp:/usr/lib/qt6/qml \
-//     quickshell -p ~/.config/omarchy/plugins/angelos.lyrics/tests
+//     quickshell -p ~/.config/omarchy/plugins/hella.lyrics/tests
 //
 // where /tmp/qsimp holds the shell's own modules (qs.Commons, qs.Ui) copied out
 // of /usr/share/omarchy/shell. Every line it prints starts with PORTTEST, so
@@ -21,7 +21,7 @@ ShellRoot {
 
     // the plugin directory, whether or not the config is passed in place
     readonly property string home: Quickshell.env("HOME")
-    readonly property string plugin: home + "/.config/omarchy/plugins/angelos.lyrics"
+    readonly property string plugin: home + "/.config/omarchy/plugins/hella.lyrics"
 
     property int passed: 0
     property int total: 0
@@ -116,7 +116,7 @@ ShellRoot {
         // (Lib.Paths.cacheDir, Lib.I18n.t): an import from outside the module
         // directory resolves to the type, not the instance
         ok("the cache path is inside the plugin's cache",
-           lyr.cacheFile("Artist\u0001Title").indexOf("angelos.lyrics/lyrics/") > 0,
+           lyr.cacheFile("Artist\u0001Title").indexOf("hella.lyrics/lyrics/") > 0,
            lyr.cacheFile("Artist\u0001Title"))
         // ---- one-time migration of a cache written before lrclib's word file was read ----
         var oldCache = { "source": "netease", "wordsTried": true,
@@ -611,11 +611,11 @@ ShellRoot {
             ok("the save reaches the shell's shell.json writer", fakeBar.writes.length === 1,
                "writes=" + fakeBar.writes.length)
             if (fakeBar.writes.length > 0) {
-                ok("it writes under this widget's id", fakeBar.writes[0].id === "angelos.lyrics",
+                ok("it writes under this widget's id", fakeBar.writes[0].id === "hella.lyrics",
                    fakeBar.writes[0].id)
                 ok("it carries the opacity", fakeBar.writes[0].entry.opacity === 60,
                    JSON.stringify(fakeBar.writes[0].entry))
-                ok("it keeps the widget id in the entry", fakeBar.writes[0].entry.id === "angelos.lyrics",
+                ok("it keeps the widget id in the entry", fakeBar.writes[0].entry.id === "hella.lyrics",
                    JSON.stringify(fakeBar.writes[0].entry))
             }
             w.bar = null
